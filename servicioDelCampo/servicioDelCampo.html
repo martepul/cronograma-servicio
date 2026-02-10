@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cronograma de Servicio del Campo</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div class="header-flex">
+        <h1 class="header-title">📋 Cronograma de Servicio del Campo</h1>
+        <div id="header-actions">
+            <button id="btnToggleTheme">🌓 Modo</button>
+            <button id="btnBloquearTodo">🔒 Bloquear Todo</button>
+            <button id="btnAsignarTerritorios">📍 Asignar Territorios</button>
+            <button id="btnAsignarConductores">🚗 Asignar Conductores</button>
+            <button id="btnLimpiarAsignaciones">🗑️ Vaciar todo</button>
+            <button id="toggleSidebar">
+                <span id="sidebarIcon" class="icon">⬅️</span>
+                <span id="sidebarText" class="text">Ocultar Panel</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="content-area">
+            <div class="table-container">
+                <table id="tablaAsignaciones">
+                    <thead>
+                        <tr id="headerRow">
+                        </tr>
+                    </thead>
+                    <tbody id="cuerpoTabla"></tbody>
+                </table>
+            </div>
+            <button id="btnExportPDF" class="btn-export">📄 DESCARGAR PDF</button>
+        </div>
+
+        <aside class="sidebar">
+            <div class="control-group">
+                <small style="color: #666; font-size: 0.8em;">*Para que el pdf refleje el mes deseado asegurese de
+                    seleccionar un rango de fechas dentro del mes.</small>
+                <div class="con_f">
+                    <h3 class="t_s">Rango de fechas</h3>
+                    <label class="sidebar-label">Fecha Inicio:</label>
+                    <input type="date" id="fechaInicio">
+                    <label class="sidebar-label">Fecha Final:</label>
+                    <input type="date" id="fechaFinal">
+                    <label class="sidebar-label">Predefinido:</label>
+                    <select id="cantidadFechas">
+                        <option value="custom">Personalizado...</option>
+                        <option value="7">1 Semana</option>
+                        <option value="15">15 Días</option>
+                        <option value="30" selected>1 Mes (30 días)</option>
+                    </select>
+                </div>
+
+                <div class="con_cl">
+                    <small style="color: #666; font-size: 0.8em;">*Seleccione las columnas en el orden deseado de
+                        izquierda a derecha.</small>
+                    <h3 class="t_s">Columnas</h3>
+                    <div class="columns-grid">
+                    </div>
+                </div>
+
+                <div class="cn_ds">
+                    <h3 class="t_s">Días y Turnos</h3>
+                    <div class="dt" id="selectorDiasContainer">
+                    </div>
+                </div>
+
+                <div class="cn_hs">
+                    <h3 class="t_s">Horarios de salida</h3>
+
+                    <div class="time-group">
+                        <label><strong>Entre Semana (Lun-Vie)</strong></label>
+                        <div class="time-row">
+                            <span>Mañana:</span> <input class="hora" type="time" id="hMananaInput">
+                        </div>
+                        <div class="time-row">
+                            <span>Tarde:</span> <input class="hora" type="time" id="hTardeInput">
+                        </div>
+                    </div>
+
+                    <div class="aviso">
+                        <small style="color: #666; font-size: 0.8em;">*Si no se establece horario para el fin de semana, se usará el horario de entre semana.</small>
+                    </div>
+
+                    <div class="time-group">
+                        <label><strong>Fines de Semana (Sáb-Dom)</strong></label>
+                        <div class="time-row">
+                            <span>Mañana:</span> <input class="hora" type="time" id="hMananaFindeInput">
+                        </div>
+                        <div class="time-row">
+                            <span>Tarde:</span> <input class="hora" type="time" id="hTardeFindeInput">
+                        </div>
+                    </div>
+
+                    <div class="time-setting-buttons">
+                        <button id="btnFijarHorario">Guardar Horario</button>
+                        <button id="btnLimpiarHorario">Borrar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="gestionContainer">
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="conductores">Conductores</button>
+                    <button class="tab-button" data-tab="lugares">Lugares</button>
+                    <button class="tab-button" data-tab="grupos">Grupos</button>
+                </div>
+
+                <div id="conductoresPane" class="tab-pane active">
+                    <h3>Gestionar Conductores</h3>
+                    <input type="text" id="nuevoConductorNombre" placeholder="Nombre...">
+                    <button id="btnAgregarConductor">+ Añadir</button>
+                    <ul id="listaConductores" class="participant-list"></ul>
+                </div>
+
+                <div id="lugaresPane" class="tab-pane">
+                    <h3>Gestionar Lugares</h3>
+                    <input type="text" id="nuevoLugarNombre" placeholder="Lugar...">
+                    <button id="btnAgregarLugar">+ Añadir</button>
+                    <ul id="listaLugares" class="participant-list"></ul>
+                </div>
+
+                <div id="gruposPane" class="tab-pane">
+                    <h3>Gestionar Grupos</h3>
+                    <small style="display:block; margin-bottom:5px; color:#666;">Acepta rangos (ej: 1-10) o nombres
+                        simples.</small>
+                    <input type="text" id="nuevoGrupoNombre" placeholder="Ej: Grupo 1 o 1-50...">
+                    <button id="btnAgregarGrupo">+ Añadir</button>
+                    <div style="margin-top:5px; display:flex; gap:5px;">
+                        <button id="btnLimpiarGrupos" style="font-size:0.8em; width:auto; padding:5px;">Borrar
+                            Todos</button>
+                    </div>
+                    <ul id="listaGrupos" class="participant-list"></ul>
+                </div>
+            </div>
+        </aside>
+    </div>
+    <script src="scripts.js"></script>
+
+</body>
+
+</html>
