@@ -81,7 +81,6 @@ body {
 .main-layout {
     display: flex;
     gap: 20px;
-    align-items: flex-start;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
     /* Efecto suave */
 }
@@ -739,6 +738,13 @@ input[type="checkbox"]:checked::after {
 
     .main-layout {
         flex-direction: column;
+    }
+
+    .table-container {
+        background: none;
+        border: none;
+        border-radius: 4px;
+        overflow-x: auto;
     }
 
     .sidebar {
