@@ -11,7 +11,8 @@
         CONFIG_COLS: 'config_cols_v1',
         CONFIG_ORDER: 'config_order_v2',
         CONFIG_DIAS: 'config_dias_v1',
-        EXTRAS: 'filas_extras_v2'
+        EXTRAS: 'filas_extras_v2',
+        COMENTARIOS: 'comentarios_v1' // NUEVO: Clave para comentarios
     };
 
     const COL_DEFS = {
@@ -59,7 +60,8 @@
         horario: { m: '', t: '', mFin: '', tFin: '' },
         filasExtras: {},
         colOrder: ['lug', 'ter', 'zon', 'gru', 'cond'],
-        configDias: {}
+        configDias: {},
+        comentarios: {} // NUEVO: Estado para comentarios
     };
 
     // --- ELEMENTOS DOM ---
@@ -131,6 +133,8 @@
             state.bloqueados = JSON.parse(localStorage.getItem(KEYS.BLOQUEADOS)) || {};
             state.horario = JSON.parse(localStorage.getItem(KEYS.HORARIO)) || { m: '', t: '', mFin: '', tFin: '' };
             state.filasExtras = JSON.parse(localStorage.getItem(KEYS.EXTRAS)) || {};
+            state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {}; // Cargar comentarios
+
             const storedOrder = JSON.parse(localStorage.getItem(KEYS.CONFIG_ORDER));
             if (storedOrder) state.colOrder = storedOrder;
             const storedDias = JSON.parse(localStorage.getItem(KEYS.CONFIG_DIAS));
@@ -150,6 +154,7 @@
         localStorage.setItem(KEYS.CONFIG_ORDER, JSON.stringify(state.colOrder));
         localStorage.setItem(KEYS.CONFIG_DIAS, JSON.stringify(state.configDias));
         localStorage.setItem(KEYS.EXTRAS, JSON.stringify(state.filasExtras));
+        localStorage.setItem(KEYS.COMENTARIOS, JSON.stringify(state.comentarios)); // Guardar comentarios
     }
 
     // --- ASIGNACIÓN ---
@@ -359,61 +364,198 @@
     }
 
     function renderTabla() {
+        // 1. Limpiar y Preparar Cabecera
         els.headerRow.innerHTML = '<th>Fecha</th><th>Hora</th>';
-        state.colOrder.forEach(k => { const th = document.createElement('th'); th.textContent = COL_DEFS[k]; els.headerRow.appendChild(th); });
+        state.colOrder.forEach(k => {
+            const th = document.createElement('th');
+            th.textContent = COL_DEFS[k];
+            els.headerRow.appendChild(th);
+        });
         els.headerRow.appendChild(Object.assign(document.createElement('th'), { className: "th-actions", textContent: "Acciones" }));
+
         els.tablaBody.innerHTML = '';
         const fechas = generarFechasDiarias();
+
         fechas.forEach(f => {
-            const id = f.toISOString().split('T')[0], locked = state.bloqueados[id], dNum = f.getDay(), cfg = state.configDias[dNum];
-            const esFinde = (dNum === 0 || dNum === 6), hM = esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m, hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
-            const showM = cfg.m, showT = cfg.t && hT !== '', extras = state.filasExtras[id] || [], datos = obtenerDatosDia(id);
+            const id = f.toISOString().split('T')[0];
+            const locked = state.bloqueados[id];
+            const dNum = f.getDay();
+            const cfg = state.configDias[dNum];
 
-            const tr = document.createElement('tr'); if (locked) tr.style.opacity = "0.7";
-            const tdF = tr.insertCell(); tdF.innerHTML = `<b>${DIAS_SEMANA[dNum].slice(0, 3)}</b><br>${f.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`;
-            tdF.rowSpan = 1 + extras.length; tdF.style.verticalAlign = 'top';
-            tr.insertCell().innerHTML = `<div class="stacked-cell">${showM ? `<div class="time-text ${showT ? 'border-bottom' : ''}">${hM || '--:--'}</div>` : ''}${showT ? `<div class="time-text">${hT}</div>` : ''}</div>`;
+            // Configuración de horarios
+            const esFinde = (dNum === 0 || dNum === 6);
+            const hM = esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m;
+            const hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
 
+            const showM = cfg.m;
+            const showT = cfg.t && hT !== '';
+            const extras = state.filasExtras[id] || [];
+            const datos = obtenerDatosDia(id);
+
+            // --- SECCIÓN DE NOTAS / COMENTARIOS ---
+            const comentario = state.comentarios[id];
+            if (comentario) {
+                const trCom = document.createElement('tr');
+                trCom.className = 'comment-row';
+                const tdCom = document.createElement('td');
+                tdCom.colSpan = 2 + state.colOrder.length + 1;
+                tdCom.className = 'comment-cell';
+
+                const spanTexto = document.createElement('span');
+                spanTexto.textContent = comentario.toUpperCase();
+                tdCom.appendChild(spanTexto);
+
+                if (!locked) {
+                    const btnDelNote = document.createElement('button');
+                    btnDelNote.className = 'btn-delete-note';
+                    btnDelNote.innerHTML = '&times;';
+                    btnDelNote.title = "Eliminar nota";
+                    btnDelNote.onclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm("¿Eliminar esta nota?")) {
+                            delete state.comentarios[id];
+                            actualizarTodo();
+                        }
+                    };
+                    tdCom.appendChild(btnDelNote);
+                }
+                trCom.appendChild(tdCom);
+                els.tablaBody.appendChild(trCom);
+            }
+
+            // --- FILA PRINCIPAL DEL DÍA ---
+            const tr = document.createElement('tr');
+            if (locked) tr.style.opacity = "0.7";
+
+            // Celda Fecha
+            const tdF = tr.insertCell();
+            tdF.setAttribute('data-label', 'Fecha');
+            tdF.innerHTML = `<b>${DIAS_SEMANA[dNum].slice(0, 3)}</b><br>${f.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`;
+            tdF.rowSpan = 1 + extras.length;
+            tdF.style.verticalAlign = 'top';
+
+            // Celda Hora
+            const tdH = tr.insertCell();
+            tdH.setAttribute('data-label', 'Horario');
+            tdH.innerHTML = `<div class="stacked-cell">
+            ${showM ? `<div class="time-text ${showT ? 'border-bottom' : ''}">${hM || '--:--'}</div>` : ''}
+            ${showT ? `<div class="time-text">${hT}</div>` : ''}
+        </div>`;
+
+            // Celdas Dinámicas (Lugar, Conductor, etc.)
             state.colOrder.forEach(tipo => {
-                const td = tr.insertCell(); const cont = document.createElement('div'); cont.className = 'stacked-cell';
+                const td = tr.insertCell();
+                td.setAttribute('data-label', COL_DEFS[tipo]); // Importante para responsive
+                const cont = document.createElement('div');
+                cont.className = 'stacked-cell';
+
                 ['M', 'T'].forEach(turno => {
                     if ((turno === 'M' && !showM) || (turno === 'T' && !showT)) return;
                     const r = `${tipo}${turno}`, val = datos[r];
-                    if (tipo === 'gru') cont.appendChild(crearSelectorGrupos(val, locked, (v) => guardarManual(id, v, r)));
-                    else if (tipo === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: val || "", disabled: locked }); i.onchange = (e) => guardarManual(id, e.target.value, r); cont.appendChild(i); }
-                    else {
-                        const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
-                        let ops = (tipo === 'lug') ? state.lugares : (tipo === 'cond') ? state.conductores : (tipo === 'ter' ? (state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios()) : (state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas()));
-                        ops.forEach(o => s.add(new Option(o, o, false, val === o))); s.onchange = (e) => guardarManual(id, e.target.value, r); cont.appendChild(s);
+
+                    if (tipo === 'gru') {
+                        cont.appendChild(crearSelectorGrupos(val, locked, (v) => guardarManual(id, v, r)));
+                    } else if (tipo === 'cua') {
+                        const i = Object.assign(document.createElement('input'), {
+                            type: 'text', className: 'input-cuadra', value: val || "", disabled: locked
+                        });
+                        i.onchange = (e) => guardarManual(id, e.target.value, r);
+                        cont.appendChild(i);
+                    } else {
+                        const s = document.createElement('select');
+                        s.disabled = locked;
+                        s.add(new Option("-", ""));
+                        let ops = (tipo === 'lug') ? state.lugares :
+                            (tipo === 'cond') ? state.conductores :
+                                (tipo === 'ter' ? (state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios()) :
+                                    (state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas()));
+
+                        ops.forEach(o => s.add(new Option(o, o, false, val === o)));
+                        s.onchange = (e) => guardarManual(id, e.target.value, r);
+                        cont.appendChild(s);
                     }
                 });
                 td.appendChild(cont);
             });
-            const tdA = tr.insertCell(); tdA.innerHTML = `<div class="actions-wrapper"><div><button class="btn-lock">${locked ? '🔒' : '🔓'}</button><button class="btn-assign" ${locked ? 'disabled' : ''}>↻</button></div><div>${showM ? '<button class="btn-add-m">+M</button>' : ''}${showT ? '<button class="btn-add-t">+T</button>' : ''}</div></div>`;
+
+            // Columna de Acciones
+            const tdA = tr.insertCell();
+            tdA.setAttribute('data-label', 'Acciones');
+            tdA.innerHTML = `
+            <div class="actions-wrapper">
+                <div class="main-actions">
+                    <button class="btn-lock" title="Bloquear">${locked ? '🔒' : '🔓'}</button>
+                    <button class="btn-assign" title="Reasignar" ${locked ? 'disabled' : ''}>↻</button>
+                    <button class="btn-note" title="Añadir Nota">📝</button>
+                </div>
+                <div class="extra-actions">
+                    ${showM ? '<button class="btn-add-m" title="Añadir fila extra mañana">+M</button>' : ''}
+                    ${showT ? '<button class="btn-add-t" title="Añadir fila extra tarde">+T</button>' : ''}
+                </div>
+            </div>`;
+
+            // Eventos de botones
             tdA.querySelector('.btn-lock').onclick = () => { state.bloqueados[id] = !state.bloqueados[id]; actualizarTodo(); };
             tdA.querySelector('.btn-assign').onclick = () => { asignarGenerico('conductor', id); asignarGenerico('territorio', id); };
+            tdA.querySelector('.btn-note').onclick = () => {
+                const actual = state.comentarios[id] || "";
+                const nuevo = prompt("Nota para este día (ej: Asamblea):", actual);
+                if (nuevo !== null) {
+                    if (nuevo.trim() === "") delete state.comentarios[id];
+                    else state.comentarios[id] = nuevo;
+                    actualizarTodo();
+                }
+            };
             if (showM) tdA.querySelector('.btn-add-m').onclick = () => agregarFilaExtra(id, 'M');
             if (showT) tdA.querySelector('.btn-add-t').onclick = () => agregarFilaExtra(id, 'T');
+
             els.tablaBody.appendChild(tr);
 
+            // --- FILAS EXTRAS ---
             extras.forEach(ex => {
-                const trx = document.createElement('tr'); if (locked) trx.style.opacity = "0.7";
-                trx.insertCell().innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? '#2196F3' : '#FF9800'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
+                const trx = document.createElement('tr');
+                if (locked) trx.style.opacity = "0.7";
+
+                // Celda Hora Extra
+                const tdExH = trx.insertCell();
+                tdExH.setAttribute('data-label', 'Hora');
+                tdExH.innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? '#2196F3' : '#FF9800'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
+
                 state.colOrder.forEach(t => {
-                    const td = trx.insertCell();
-                    if (t === 'gru') td.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v)));
-                    else if (t === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked }); i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); td.appendChild(i); }
-                    else {
+                    const tdEx = trx.insertCell();
+                    tdEx.setAttribute('data-label', COL_DEFS[t]);
+                    if (t === 'gru') {
+                        tdEx.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v)));
+                    } else if (t === 'cua') {
+                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked });
+                        i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
+                        tdEx.appendChild(i);
+                    } else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
                         let ops = (t === 'lug' ? state.lugares : t === 'cond' ? state.conductores : t === 'ter' ? (state.mapaCoherencia[ex.lug]?.ter || getRangoTerritorios()) : (state.mapaCoherencia[ex.lug]?.zon.filter(z => z.startsWith(ex.ter + '-')) || getRangoZonas()));
-                        ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o))); s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); td.appendChild(s);
+                        ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o)));
+                        s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
+                        tdEx.appendChild(s);
                     }
                 });
-                const tdAx = trx.insertCell(); const wrap = document.createElement('div'); wrap.className = 'actions-wrapper';
-                const bDel = document.createElement('button'); bDel.textContent = '×'; bDel.style.color = 'red'; bDel.disabled = locked; bDel.onclick = () => eliminarFilaExtra(id, ex.id);
-                wrap.appendChild(bDel); tdAx.appendChild(wrap); els.tablaBody.appendChild(trx);
+
+                // Acción eliminar extra
+                const tdAx = trx.insertCell();
+                tdAx.setAttribute('data-label', 'Eliminar');
+                const wrap = document.createElement('div'); wrap.className = 'actions-wrapper';
+                const bDel = document.createElement('button');
+                bDel.innerHTML = 'Eliminar fila &times;';
+                bDel.style.color = 'red';
+                bDel.style.width = '100%';
+                bDel.disabled = locked;
+                bDel.onclick = () => eliminarFilaExtra(id, ex.id);
+                wrap.appendChild(bDel);
+                tdAx.appendChild(wrap);
+                els.tablaBody.appendChild(trx);
             });
         });
+
+        // Actualizar botón de bloqueo global
         const ids = fechas.map(f => f.toISOString().split('T')[0]);
         els.btnBloquear.innerHTML = (ids.length > 0 && ids.every(i => state.bloqueados[i])) ? '🔓 Desbloquear Todo' : '🔒 Bloquear Todo';
     }
@@ -459,7 +601,8 @@
                 const cfg = state.configDias[f.getDay()];
                 const hT = (f.getDay() === 0 || f.getDay() === 6) ? (state.horario.tFin || state.horario.t) : state.horario.t;
                 const extras = (state.filasExtras[id] || []).length;
-                totalFilasCuerpo += (cfg.m ? 1 : 0) + (cfg.t && hT !== '' ? 1 : 0) + extras;
+                const tieneComentario = !!state.comentarios[id]; // Verificar si tiene nota
+                totalFilasCuerpo += (cfg.m ? 1 : 0) + (cfg.t && hT !== '' ? 1 : 0) + extras + (tieneComentario ? 1 : 0);
             });
             const estimatedHeight = (totalFilasCuerpo * 7) + 8; // Altura estimada reducida
 
@@ -489,6 +632,23 @@
 
             semana.forEach(f => {
                 const id = f.toISOString().split('T')[0];
+
+                // --- NUEVO: INSERTAR NOTA EN PDF ---
+                if (state.comentarios[id]) {
+                    weekRows.push([{
+                        content: state.comentarios[id].toUpperCase(),
+                        colSpan: pdfHeaders.length,
+                        styles: {
+                            halign: 'center',
+                            fillColor: [255, 253, 208], // Amarillo suave
+                            textColor: [50, 50, 50],
+                            fontStyle: 'bolditalic',
+                            fontSize: 7.5,
+                            cellPadding: 1.5
+                        }
+                    }]);
+                }
+
                 const d = obtenerDatosDia(id);
                 const dNum = f.getDay();
                 const cfg = state.configDias[dNum];
