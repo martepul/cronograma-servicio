@@ -368,7 +368,6 @@ button:hover {
     }
 
     .sidebar {
-        width: 100%;
         flex: none;
         position: static;
     }
@@ -525,7 +524,10 @@ input[type="checkbox"]:checked::after {
     padding-left: 5px;
 }
 
-.con_cl, .con_f, .cn_ds, .cn_hs {
+.con_cl,
+.con_f,
+.cn_ds,
+.cn_hs {
     border-bottom: solid 1px var(--border);
     padding-bottom: 10px;
 }
@@ -539,7 +541,8 @@ input[type="checkbox"]:checked::after {
 /* Contenedor de acciones en la celda */
 #cuerpoTabla td:last-child div {
     display: flex !important;
-    flex-direction: row !important; /* Alineación horizontal para mejor uso del espacio */
+    flex-direction: row !important;
+    /* Alineación horizontal para mejor uso del espacio */
     flex-wrap: wrap;
     gap: 4px;
     justify-content: center;
@@ -547,9 +550,9 @@ input[type="checkbox"]:checked::after {
 }
 
 /* Regla universal para todos los botones dentro de la columna de acciones */
-.btn-lock, 
-.btn-assign, 
-.btn-add-m, 
+.btn-lock,
+.btn-assign,
+.btn-add-m,
 .btn-add-t,
 #cuerpoTabla td:last-child button {
     width: 34px !important;
@@ -562,31 +565,35 @@ input[type="checkbox"]:checked::after {
     font-size: 1.1rem;
     border-radius: 4px;
     transition: all 0.2s ease;
-    flex-shrink: 0; /* Evita que se deformen */
+    flex-shrink: 0;
+    /* Evita que se deformen */
 }
 
 /* 1. Contenedor de la celda de acciones: centrado total */
 #cuerpoTabla td:last-child {
     vertical-align: middle;
     text-align: center;
-    padding: 0 5px !important; /* Padding mínimo para no ensanchar la fila */
+    padding: 0 5px !important;
+    /* Padding mínimo para no ensanchar la fila */
 }
 
 /* 2. Normalización de los contenedores internos del script */
 #cuerpoTabla td:last-child div {
     display: flex !important;
-    flex-direction: row !important; /* Alineación horizontal */
+    flex-direction: row !important;
+    /* Alineación horizontal */
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
-    gap: 4px !important; /* Espaciado uniforme */
+    gap: 4px !important;
+    /* Espaciado uniforme */
     margin: 0 !important;
 }
 
 /* 3. Botones: Tamaño fijo y compacto para no estirar la fila */
-.btn-lock, 
-.btn-assign, 
-.btn-add-m, 
+.btn-lock,
+.btn-assign,
+.btn-add-m,
 .btn-add-t,
 #cuerpoTabla td:last-child button {
     width: 28px !important;
@@ -609,11 +616,9 @@ input[type="checkbox"]:checked::after {
 /* 4. Centrado específico para el botón de borrar (X) en filas extras */
 /* Como no tiene un div contenedor, lo centramos mediante la celda */
 #cuerpoTabla tr td:last-child:not(:has(div)) {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%; 
-    min-height: 40px; /* Altura mínima similar a las filas de datos */
+    height: 100%;
+    min-height: 40px;
+    /* Altura mínima similar a las filas de datos */
 }
 
 /* 5. Ajuste de ancho de columna para evitar saltos de línea innecesarios */
@@ -627,4 +632,208 @@ input[type="checkbox"]:checked::after {
 #cuerpoTabla td:last-child button:hover {
     border-color: var(--primary);
     background-color: var(--card-bg);
+}
+
+/* --- ESTILO DE NOTA TIPO BANNER --- */
+.comment-row {
+    background-color: transparent !important;
+}
+
+.comment-cell {
+    text-align: center;
+    font-weight: bold;
+    font-style: italic;
+    background-color: #fff9c4 !important;
+    /* Amarillo nota */
+    color: var(--primary) !important;
+    /* Azul del tema */
+    border-bottom: 2px solid var(--primary) !important;
+    /* Línea gruesa separadora */
+    padding: 10px !important;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Ajuste para que no se pierda en modo oscuro */
+[data-theme="dark"] .comment-cell {
+    background-color: #4a4a2e !important;
+    color: #ffffff !important;
+}
+
+/* Botón de nota en la columna de acciones */
+.btn-note {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    line-height: 1;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--card-accent);
+    cursor: pointer;
+}
+
+.btn-note:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* --- Actualización para notas con botón de eliminar --- */
+
+/* Aseguramos que la celda de comentario permita posicionar el botón */
+.comment-cell {
+    position: relative;
+    /* Necesario para ubicar el botón X */
+    padding-right: 40px !important;
+    /* Espacio para que el texto no tape el botón */
+}
+
+/* Estilo del botón de eliminar nota (X) */
+.btn-delete-note {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    /* Centrado vertical exacto */
+    background: transparent !important;
+    border: none !important;
+    color: #d32f2f !important;
+    /* Rojo */
+    font-weight: bold;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 5px !important;
+    width: auto !important;
+    height: auto !important;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.btn-delete-note:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.2);
+    /* Efecto pop al pasar el mouse */
+    background: transparent !important;
+    border-color: transparent !important;
+}
+
+/* --- DISEÑO MÓVIL REFINADO --- */
+@media screen and (max-width: 850px) {
+    body {
+        padding: 10px;
+    }
+
+    .header-flex {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .main-layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        position: relative;
+        top: 0;
+        max-height: 350px;
+    }
+
+    thead {
+        display: none;
+    }
+
+    tr {
+        display: block;
+        margin-bottom: 20px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card-bg);
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px !important;
+        border-bottom: 1px solid var(--card-accent);
+        text-align: right;
+    }
+
+    td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: var(--primary);
+        font-size: 0.75rem;
+        flex: 1;
+        text-align: left;
+    }
+
+    /* Solución a los dos selectores */
+    .stacked-cell {
+        flex: 2;
+        width: 65%;
+    }
+
+    /* Añadimos etiquetas M y T mediante CSS para no tocar el HTML innecesariamente */
+    .turno-m-wrapper::before {
+        content: "M: ";
+        font-weight: bold;
+        font-size: 0.7rem;
+        margin-right: 5px;
+        color: var(--text-muted);
+    }
+
+    .turno-t-wrapper::before {
+        content: "T: ";
+        font-weight: bold;
+        font-size: 0.7rem;
+        margin-right: 5px;
+        color: var(--text-muted);
+    }
+
+    .turno-m-wrapper,
+    .turno-t-wrapper {
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+
+    td select,
+    td input {
+        flex: 2;
+        max-width: 160px;
+        font-size: 16px !important;
+    }
+
+    /* Botonera de acciones */
+    td:last-child {
+        background: var(--card-accent);
+        justify-content: center;
+        padding: 15px !important;
+    }
+
+    .btn-lock,
+    .btn-assign,
+    .btn-note,
+    .btn-add-m,
+    .btn-add-t,
+    #cuerpoTabla td:last-child button {
+        width: 44px !important;
+        height: 44px !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem !important;
+    }
 }
