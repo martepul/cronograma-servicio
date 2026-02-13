@@ -12,7 +12,8 @@
         CONFIG_ORDER: 'config_order_v2',
         CONFIG_DIAS: 'config_dias_v1',
         EXTRAS: 'filas_extras_v2',
-        COMENTARIOS: 'comentarios_v1' // NUEVO: Clave para comentarios
+        COMENTARIOS: 'comentarios_v1',
+        START_WEEK: 'start_week_v1' // NUEVO
     };
 
     const COL_DEFS = {
@@ -61,7 +62,8 @@
         filasExtras: {},
         colOrder: ['lug', 'ter', 'zon', 'gru', 'cond'],
         configDias: {},
-        comentarios: {} // NUEVO: Estado para comentarios
+        comentarios: {},
+        startOfWeek: 1 // Por defecto Lunes (1)
     };
 
     // --- ELEMENTOS DOM ---
@@ -133,13 +135,20 @@
             state.bloqueados = JSON.parse(localStorage.getItem(KEYS.BLOQUEADOS)) || {};
             state.horario = JSON.parse(localStorage.getItem(KEYS.HORARIO)) || { m: '', t: '', mFin: '', tFin: '' };
             state.filasExtras = JSON.parse(localStorage.getItem(KEYS.EXTRAS)) || {};
-            state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {}; // Cargar comentarios
+            state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {};
 
             const storedOrder = JSON.parse(localStorage.getItem(KEYS.CONFIG_ORDER));
             if (storedOrder) state.colOrder = storedOrder;
             const storedDias = JSON.parse(localStorage.getItem(KEYS.CONFIG_DIAS));
             state.configDias = storedDias || {};
             if (!storedDias) { for (let i = 0; i < 7; i++) state.configDias[i] = { m: true, t: (i !== 0) }; }
+
+            // Cargar inicio de semana
+            const savedStart = localStorage.getItem(KEYS.START_WEEK);
+            state.startOfWeek = savedStart !== null ? parseInt(savedStart) : 1;
+            const selStart = document.getElementById('inicioSemanaSelect');
+            if (selStart) selStart.value = state.startOfWeek;
+
         } catch (e) { console.error("Error loading storage", e); }
     }
 
@@ -154,7 +163,8 @@
         localStorage.setItem(KEYS.CONFIG_ORDER, JSON.stringify(state.colOrder));
         localStorage.setItem(KEYS.CONFIG_DIAS, JSON.stringify(state.configDias));
         localStorage.setItem(KEYS.EXTRAS, JSON.stringify(state.filasExtras));
-        localStorage.setItem(KEYS.COMENTARIOS, JSON.stringify(state.comentarios)); // Guardar comentarios
+        localStorage.setItem(KEYS.COMENTARIOS, JSON.stringify(state.comentarios));
+        localStorage.setItem(KEYS.START_WEEK, state.startOfWeek);
     }
 
     // --- ASIGNACIÓN ---
@@ -339,9 +349,24 @@
     }
 
     function renderSelectorDias() {
-        if (!els.diasContainer) return; els.diasContainer.innerHTML = '';
-        DIAS_SEMANA.forEach((n, i) => {
-            const row = document.createElement('div'); row.className = 'day-config-row';
+        if (!els.diasContainer) return;
+        els.diasContainer.innerHTML = '';
+
+        // Creamos el orden basado en la selección
+        // Si es Lunes (1): [1, 2, 3, 4, 5, 6, 0]
+        // Si es Domingo (0): [0, 1, 2, 3, 4, 5, 6]
+        let ordenDias = [];
+        let start = state.startOfWeek;
+        for (let i = 0; i < 7; i++) {
+            ordenDias.push((start + i) % 7);
+        }
+
+        ordenDias.forEach((i) => {
+            const n = DIAS_SEMANA[i];
+            const row = document.createElement('div');
+            row.className = 'day-config-row';
+
+            // data-day sigue siendo el índice original (0=Domingo) para mantener la lógica interna
             row.innerHTML = `<span style="width:80px">${n}</span>
                 <label>Mañana <input type="checkbox" data-day="${i}" data-shift="m" ${state.configDias[i].m ? 'checked' : ''}></label>
                 <label>Tarde <input type="checkbox" data-day="${i}" data-shift="t" ${state.configDias[i].t ? 'checked' : ''}></label>`;
@@ -572,10 +597,15 @@
 
         const semanas = [];
         let semActual = [];
+
+        // --- LÓGICA DE AGRUPACIÓN POR SEMANA MEJORADA ---
         fechas.forEach((f, i) => {
             semActual.push(f);
+
             const sig = fechas[i + 1];
-            if (f.getDay() === 0 || !sig || sig.getDay() === 1) {
+            // Una semana termina si NO hay día siguiente, 
+            // O si el día siguiente coincide con el 'startOfWeek' elegido
+            if (!sig || sig.getDay() === state.startOfWeek) {
                 semanas.push([...semActual]);
                 semActual = [];
             }
@@ -599,7 +629,9 @@
             semana.forEach(f => {
                 const id = f.toISOString().split('T')[0];
                 const cfg = state.configDias[f.getDay()];
-                const hT = (f.getDay() === 0 || f.getDay() === 6) ? (state.horario.tFin || state.horario.t) : state.horario.t;
+                // correccion para detectar fines de semana nativos para horarios
+                const esFindeNativo = (f.getDay() === 0 || f.getDay() === 6);
+                const hT = esFindeNativo ? (state.horario.tFin || state.horario.t) : state.horario.t;
                 const extras = (state.filasExtras[id] || []).length;
                 const tieneComentario = !!state.comentarios[id]; // Verificar si tiene nota
                 totalFilasCuerpo += (cfg.m ? 1 : 0) + (cfg.t && hT !== '' ? 1 : 0) + extras + (tieneComentario ? 1 : 0);
@@ -720,9 +752,73 @@
         document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar todo?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
         els.btnBloquear.onclick = () => { const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]), all = ids.every(i => state.bloqueados[i]); ids.forEach(i => state.bloqueados[i] = !all); actualizarTodo(); };
         document.getElementById('btnToggleTheme').onclick = () => { const el = document.documentElement; el.setAttribute('data-theme', el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); };
-        document.getElementById('toggleSidebar').onclick = () => { const l = document.querySelector('.main-layout'), h = l.classList.toggle('sidebar-hidden'); document.getElementById('sidebarIcon').textContent = h ? "➡️" : "⬅️"; document.getElementById('sidebarText').textContent = h ? "Mostrar" : "Ocultar"; setTimeout(actualizarTodo, 300); };
+
+        const layout = document.querySelector('.main-layout');
+        const sidebarIcon = document.getElementById('sidebarIcon');
+        const sidebarText = document.getElementById('sidebarText');
+
+        const actualizarInterfazBoton = () => {
+            const esMovil = window.innerWidth <= 850;
+            const estaOculto = layout.classList.contains('sidebar-hidden');
+
+            if (esMovil) {
+                sidebarIcon.textContent = estaOculto ? "⚙️" : "❌";
+                sidebarText.textContent = estaOculto ? "Configuración" : "Cerrar";
+            } else {
+                sidebarIcon.textContent = estaOculto ? "➡️" : "⬅️";
+                sidebarText.textContent = estaOculto ? "Mostrar" : "Ocultar";
+            }
+        };
+
+        // --- LÓGICA DEL BOTÓN TOGGLE ---
+        document.getElementById('toggleSidebar').onclick = () => {
+            layout.classList.toggle('sidebar-hidden');
+            actualizarInterfazBoton();
+            setTimeout(() => { if (typeof actualizarTodo === 'function') actualizarTodo(); }, 300);
+        };
+
+        // --- INTEGRACIÓN: CERRAR AL TOCAR EL FONDO OSCURO (OVERLAY) ---
+        const overlay = document.getElementById('sidebarOverlay');
+        if (overlay) {
+            overlay.onclick = () => {
+                // Si el menú está abierto (NO tiene la clase sidebar-hidden), lo cerramos
+                if (!layout.classList.contains('sidebar-hidden')) {
+                    layout.classList.add('sidebar-hidden');
+                    actualizarInterfazBoton();
+                    // Refrescamos la tabla tras la animación
+                    setTimeout(() => {
+                        if (typeof actualizarTodo === 'function') actualizarTodo();
+                    }, 300);
+                }
+            };
+        }
+
+        window.addEventListener('resize', actualizarInterfazBoton);
+        actualizarInterfazBoton(); // Llamada inicial
+
+        // Ajuste del Estado Inicial basado en la resolución
+        if (window.innerWidth <= 850) {
+            // Si es móvil, nos aseguramos de que empiece oculto
+            layout.classList.add('sidebar-hidden');
+        } else {
+            // Si es PC, nos aseguramos de que empiece visible
+            layout.classList.remove('sidebar-hidden');
+        }
+        actualizarInterfazBoton();
+        // ----------------------------------------------
+
         document.getElementById('btnFijarHorario').onclick = () => { state.horario = { m: els.hManana.value, t: els.hTarde.value, mFin: els.hMananaFin.value, tFin: els.hTardeFin.value }; actualizarTodo(); };
         document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = () => { document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active')); document.getElementById(btn.dataset.tab + 'Pane').classList.add('active'); });
+
+        const selStart = document.getElementById('inicioSemanaSelect');
+        if (selStart) {
+            selStart.value = state.startOfWeek;
+            selStart.onchange = (e) => {
+                state.startOfWeek = parseInt(e.target.value);
+                actualizarTodo();
+            };
+        }
+
         ajustarFechas('combo');
     }
     document.addEventListener('DOMContentLoaded', init);
