@@ -315,7 +315,8 @@ button:hover {
 }
 
 .btn-export {
-    margin-top: 20px;
+    margin-top: 10px;
+    margin-bottom: 10px;
     width: 100%;
     background: var(--primary);
     color: #fff;
@@ -730,6 +731,16 @@ input[type="checkbox"]:checked::after {
         padding: 10px;
     }
 
+    /* 1. Aseguramos que el header esté SIEMPRE por encima de todo */
+    header {
+        position: relative;
+        z-index: 10001;
+        /* Mayor que el 9999 del sidebar */
+        background: var(--bg-card);
+        /* Fondo sólido para que no se transparente el menú */
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
     .header-flex {
         flex-direction: column;
         align-items: flex-start;
@@ -737,7 +748,9 @@ input[type="checkbox"]:checked::after {
     }
 
     .main-layout {
-        flex-direction: column;
+        display: block;
+        /* Evita que el sidebar empuje el contenido lateralmente */
+        position: relative;
     }
 
     .table-container {
@@ -747,10 +760,67 @@ input[type="checkbox"]:checked::after {
         overflow-x: auto;
     }
 
-    .sidebar {
-        position: relative;
+    /* 1. La capa oscura de fondo (Overlay) */
+    .sidebar-overlay {
+        position: fixed;
         top: 0;
-        max-height: 350px;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        /* Oscurece el fondo */
+        z-index: 9998;
+        /* Debajo del sidebar, encima del contenido */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease;
+        /* Importante: permite hacer clic en él */
+        pointer-events: none;
+    }
+
+    /* Cuando el menú está ABIERTO (no tiene la clase sidebar-hidden) */
+    .main-layout:not(.sidebar-hidden) .sidebar-overlay {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        /* Activamos el clic */
+    }
+
+    /* 2. El Sidebar (Menú) */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        /* Ancho completo del móvil */
+
+        /* AQUÍ ESTÁ LA CLAVE: 50% de la altura de la pantalla */
+        height: 50vh !important;
+        max-height: 50vh;
+
+        background: var(--bg);
+        z-index: 9999;
+        /* Encima de todo */
+        border-bottom: 2px solid var(--primary);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        margin: 0 !important;
+        overflow-y: auto;
+        /* Scroll interno si el contenido es largo */
+
+        /* Animación desde ARRIBA */
+        transform: translateY(0);
+        visibility: visible;
+        transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+
+    /* Estado OCULTO: Se sube fuera de la pantalla */
+    .main-layout.sidebar-hidden .sidebar {
+        transform: translateY(-100%);
+        visibility: hidden;
+    }
+
+    .content-area {
+        width: 100% !important;
+        padding-top: 10px;
     }
 
     thead {
