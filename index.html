@@ -30,6 +30,7 @@
     </div>
 
     <div class="main-layout">
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <div class="content-area">
             <div class="table-container">
                 <table id="tablaAsignaciones">
@@ -45,6 +46,7 @@
 
         <aside class="sidebar">
             <div class="control-group">
+                <button id="btnExportPDF" class="btn-export">📄 DESCARGAR PDF</button>
                 <small style="color: #666; font-size: 0.8em;">*Para que el pdf refleje el mes deseado asegurese de
                     seleccionar un rango de fechas dentro del mes.</small>
                 <div class="con_f">
@@ -53,12 +55,20 @@
                     <input type="date" id="fechaInicio">
                     <label class="sidebar-label">Fecha Final:</label>
                     <input type="date" id="fechaFinal">
+
                     <label class="sidebar-label">Predefinido:</label>
                     <select id="cantidadFechas">
                         <option value="custom">Personalizado...</option>
                         <option value="7">1 Semana</option>
                         <option value="15">15 Días</option>
                         <option value="30" selected>1 Mes (30 días)</option>
+                    </select>
+
+                    <label class="sidebar-label-block" style="margin-top:10px; display:block;">Inicio de
+                        Semana:</label>
+                    <select id="inicioSemanaSelect">
+                        <option value="1" selected>Lunes</option>
+                        <option value="0">Domingo</option>
                     </select>
                 </div>
 
@@ -90,7 +100,8 @@
                     </div>
 
                     <div class="aviso">
-                        <small style="color: #666; font-size: 0.8em;">*Si no se establece horario para el fin de semana, se usará el horario de entre semana.</small>
+                        <small style="color: #666; font-size: 0.8em;">*Si no se establece horario para el fin de
+                            semana, se usará el horario de entre semana.</small>
                     </div>
 
                     <div class="time-group">
@@ -151,5 +162,3 @@
 </body>
 
 </html>
-
-
