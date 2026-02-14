@@ -840,8 +840,6 @@ input[type="checkbox"]:checked::after {
     td {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        padding: 12px 15px !important;
         border-bottom: 1px solid var(--card-accent);
         text-align: right;
     }
@@ -853,12 +851,6 @@ input[type="checkbox"]:checked::after {
         font-size: 0.75rem;
         flex: 1;
         text-align: left;
-    }
-
-    /* Solución a los dos selectores */
-    .stacked-cell {
-        flex: 2;
-        width: 65%;
     }
 
     /* Añadimos etiquetas M y T mediante CSS para no tocar el HTML innecesariamente */
@@ -912,4 +904,33 @@ input[type="checkbox"]:checked::after {
         justify-content: center;
         font-size: 1.2rem !important;
     }
+}
+
+/* --- Estilos para Lugar + Grupo --- */
+.lug-gru-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap; /* Para que el selector de grupo se ponga debajo si no cabe */
+}
+
+.lug-gru-wrapper .btn-add-gru {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 1.1rem;
+    line-height: 1;
+    flex-shrink: 0; /* Evita que se encoja */
+}
+
+.lug-gru-wrapper > select {
+    flex: 1 1 auto; /* Permite que el selector crezca */
+    min-width: 120px; /* Ancho mínimo para que no se vea mal */
+}
+
+.lug-gru-wrapper .gru-container {
+    flex-basis: 100%; /* Ocupa toda la línea cuando es visible */
+    margin-top: 5px;
 }
