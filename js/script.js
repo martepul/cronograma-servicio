@@ -589,6 +589,16 @@
 
     // --- PDF EXPORT (COMPACTO EXTREMO - SIN ESPACIOS ENTRE SEMANAS) ---
     function exportarPDF() {
+        const formatTime12Hour = (time24) => {
+            if (!time24 || !time24.includes(':')) return '--:--';
+            const [hours, minutes] = time24.split(':');
+            let h = parseInt(hours, 10);
+            const ampm = h >= 12 ? 'pm' : 'am';
+            h = h % 12;
+            h = h ? h : 12; // the hour '0' should be '12'
+            return `${h}:${minutes} ${ampm}`;
+        };
+
         if (!window.jspdf) return alert("jsPDF no cargado.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
@@ -704,7 +714,7 @@
                         });
                         esPrimeraFilaDelDia = false;
                     }
-                    row.push(hora || '--:--');
+                    row.push(formatTime12Hour(hora));
                     state.colOrder.forEach(k => {
                         let val = turnoLetra ? source[`${k}${turnoLetra}`] : source[k];
                         row.push(k === 'gru' ? formatearGruposParaPDF(val) : (val || "-"));
@@ -746,7 +756,7 @@
         document.getElementById('btnAgregarLugar').onclick = () => modificarLista('lugar', 'agregar');
         document.getElementById('btnAgregarGrupo').onclick = () => modificarLista('grupo', 'agregar');
         document.getElementById('btnLimpiarGrupos').onclick = () => modificarLista('grupo', 'borrarTodo');
-        document.getElementById('btnExportPDF').onclick = exportarPDF;
+        document.querySelectorAll('.btn-export').forEach(btn => btn.onclick = exportarPDF);
         document.getElementById('btnAsignarConductores').onclick = () => asignarGenerico('conductor');
         document.getElementById('btnAsignarTerritorios').onclick = () => asignarGenerico('territorio');
         document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar todo?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
