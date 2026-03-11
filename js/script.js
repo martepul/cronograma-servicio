@@ -693,57 +693,40 @@
         });
 
         const pdfHeaders = ['DÍA', 'HORA', ...state.colOrder.map(k => COL_DEFS[k].toUpperCase())];
-        let currentY = 18;
-        let ultimoMesTitulado = "";
-        const PAGE_LIMIT = 285;
+        let currentY = 12; // Margen superior inicial reducido
+
+        // Título del documento (Toma el mes de la primera fecha seleccionada)
+        const mesDoc = fechas[0].toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+        const anioDoc = fechas[0].getFullYear();
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(`PROGRAMA DE SERVICIO - ${mesDoc} ${anioDoc}`, 105, currentY, { align: 'center' });
+        
+        currentY += 4; // Espacio entre el título y la tabla
+
+        // Aquí guardaremos TODAS las filas del mes para usar una sola tabla
+        const allRows = [];
 
         semanas.forEach((semana, idx) => {
             const fI = semana[0];
             const fF = semana[semana.length - 1];
             const mesI = fI.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-            const anioI = fI.getFullYear();
             const mesF = fF.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-            const mesSemanaKey = `${mesI} ${anioI}`;
-
-            let totalFilasCuerpo = 1;
-            semana.forEach(f => {
-                const id = f.toISOString().split('T')[0];
-                const cfg = state.configDias[f.getDay()];
-                const esFindeNativo = (f.getDay() === 0 || f.getDay() === 6);
-                const hT = esFindeNativo ? (state.horario.tFin || state.horario.t) : state.horario.t;
-                const extras = (state.filasExtras[id] || []).length;
-                const tieneComentario = !!state.comentarios[id];
-                totalFilasCuerpo += (cfg.m ? 1 : 0) + (cfg.t && hT !== '' ? 1 : 0) + extras + (tieneComentario ? 1 : 0);
-            });
-            const estimatedHeight = (totalFilasCuerpo * 7) + 8;
-
-            const esNuevoMes = mesSemanaKey !== ultimoMesTitulado;
-
-            if ((currentY + estimatedHeight > PAGE_LIMIT)) {
-                doc.addPage();
-                currentY = 18;
-            }
-
-            if (currentY === 18 || esNuevoMes) {
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(13);
-                doc.text(`PROGRAMA DE SERVICIO - ${mesSemanaKey}`, 105, currentY - 5, { align: 'center' });
-                ultimoMesTitulado = mesSemanaKey;
-            }
 
             const tituloSemana = `SEMANA DEL ${fI.getDate()} DE ${mesI} AL ${fF.getDate()} DE ${mesF}`;
-            const weekRows = [];
-            weekRows.push([{
+            
+            // Fila separadora de semana
+            allRows.push([{
                 content: tituloSemana,
                 colSpan: pdfHeaders.length,
-                styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 8.5, cellPadding: 1 }
+                styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 7.5, cellPadding: 0.8 }
             }]);
 
             semana.forEach(f => {
                 const id = f.toISOString().split('T')[0];
 
                 if (state.comentarios[id]) {
-                    weekRows.push([{
+                    allRows.push([{
                         content: state.comentarios[id].toUpperCase(),
                         colSpan: pdfHeaders.length,
                         styles: {
@@ -751,8 +734,8 @@
                             fillColor: [255, 253, 208],
                             textColor: [50, 50, 50],
                             fontStyle: 'bolditalic',
-                            fontSize: 7.5,
-                            cellPadding: 1.5
+                            fontSize: 7,
+                            cellPadding: 1
                         }
                     }]);
                 }
@@ -784,14 +767,12 @@
                     state.colOrder.forEach(k => {
                         let val = turnoLetra ? source[`${k}${turnoLetra}`] : source[k];
 
-                        // --- CAMBIO SOLICITADO: Inyectar grupo en Lugar de salida ---
                         if (k === 'lug') {
                             const rawGru = turnoLetra ? source[`gru${turnoLetra}`] : source['gru'];
                             const gruTxt = formatearGruposParaPDF(rawGru);
                             const lugTxt = val || "-";
 
                             if (gruTxt) {
-                                // Simulamos "celda izquierda | celda derecha" en una sola columna con espaciado
                                 val = `${gruTxt}   |   ${lugTxt}`;
                             } else {
                                 val = lugTxt;
@@ -804,7 +785,7 @@
 
                         row.push(val);
                     });
-                    weekRows.push(row);
+                    allRows.push(row);
                 };
 
                 if (showM) addRow(hM, d, 'M');
@@ -812,19 +793,19 @@
                 if (showT) addRow(hT, d, 'T');
                 extras.filter(e => e.turno === 'T').forEach(ex => addRow(hT, ex));
             });
+        });
 
-            doc.autoTable({
-                head: [pdfHeaders],
-                body: weekRows,
-                startY: currentY,
-                theme: 'grid',
-                styles: { fontSize: 7.5, cellPadding: 1.1, halign: 'center', overflow: 'linebreak' },
-                headStyles: { fillColor: [44, 62, 80], textColor: 255 },
-                margin: { left: 10, right: 10 },
-                rowPageBreak: 'avoid'
-            });
-
-            currentY = doc.lastAutoTable.finalY;
+        // Generamos UNA SOLA tabla con todas las semanas juntas
+        doc.autoTable({
+            head: [pdfHeaders],
+            body: allRows,
+            startY: currentY,
+            theme: 'grid',
+            // OPTIMIZACIONES DE ESPACIO PARA QUE QUEPA UN MES:
+            styles: { fontSize: 7, cellPadding: 0.8, halign: 'center', overflow: 'linebreak' },
+            headStyles: { fillColor: [44, 62, 80], textColor: 255, fontSize: 7.5 },
+            margin: { left: 8, right: 8, top: 12, bottom: 10 }, 
+            rowPageBreak: 'avoid'
         });
 
         doc.save(`Programa_Servicio.pdf`);
