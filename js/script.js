@@ -701,7 +701,7 @@
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
         doc.text(`PROGRAMA DE SERVICIO - ${mesDoc} ${anioDoc}`, 105, currentY, { align: 'center' });
-        
+
         currentY += 4; // Espacio entre el título y la tabla
 
         // Aquí guardaremos TODAS las filas del mes para usar una sola tabla
@@ -714,7 +714,7 @@
             const mesF = fF.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
 
             const tituloSemana = `SEMANA DEL ${fI.getDate()} DE ${mesI} AL ${fF.getDate()} DE ${mesF}`;
-            
+
             // Fila separadora de semana
             allRows.push([{
                 content: tituloSemana,
@@ -802,19 +802,19 @@
             startY: currentY,
             theme: 'grid',
             // OPTIMIZACIONES DE ESPACIO PARA QUE QUEPA UN MES:
-            styles: { 
+            styles: {
                 fontSize: 8.5,           // <-- Tamaño de letra un poco más grande
                 fontStyle: 'bold',       // <-- Letra en negrita para toda la tabla
-                cellPadding: 0.8, 
-                halign: 'center', 
-                overflow: 'linebreak' 
+                cellPadding: 0.8,
+                halign: 'center',
+                overflow: 'linebreak'
             },
-            headStyles: { 
-                fillColor: [44, 62, 80], 
-                textColor: 255, 
+            headStyles: {
+                fillColor: [44, 62, 80],
+                textColor: 255,
                 fontSize: 9              // <-- Encabezados un poco más grandes también
             },
-            margin: { left: 8, right: 8, top: 12, bottom: 10 }, 
+            margin: { left: 8, right: 8, top: 12, bottom: 10 },
             rowPageBreak: 'avoid'
         });
 
