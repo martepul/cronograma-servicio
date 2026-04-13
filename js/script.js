@@ -802,8 +802,18 @@
             startY: currentY,
             theme: 'grid',
             // OPTIMIZACIONES DE ESPACIO PARA QUE QUEPA UN MES:
-            styles: { fontSize: 7, cellPadding: 0.8, halign: 'center', overflow: 'linebreak' },
-            headStyles: { fillColor: [44, 62, 80], textColor: 255, fontSize: 7.5 },
+            styles: { 
+                fontSize: 8.5,           // <-- Tamaño de letra un poco más grande
+                fontStyle: 'bold',       // <-- Letra en negrita para toda la tabla
+                cellPadding: 0.8, 
+                halign: 'center', 
+                overflow: 'linebreak' 
+            },
+            headStyles: { 
+                fillColor: [44, 62, 80], 
+                textColor: 255, 
+                fontSize: 9              // <-- Encabezados un poco más grandes también
+            },
             margin: { left: 8, right: 8, top: 12, bottom: 10 }, 
             rowPageBreak: 'avoid'
         });
