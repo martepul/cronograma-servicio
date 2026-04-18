@@ -911,7 +911,8 @@ input[type="checkbox"]:checked::after {
     display: flex;
     align-items: center;
     gap: 5px;
-    flex-wrap: wrap; /* Para que el selector de grupo se ponga debajo si no cabe */
+    flex-wrap: wrap;
+    /* Para que el selector de grupo se ponga debajo si no cabe */
 }
 
 .lug-gru-wrapper .btn-add-gru {
@@ -922,15 +923,111 @@ input[type="checkbox"]:checked::after {
     margin: 0 !important;
     font-size: 1.1rem;
     line-height: 1;
-    flex-shrink: 0; /* Evita que se encoja */
+    flex-shrink: 0;
+    /* Evita que se encoja */
 }
 
-.lug-gru-wrapper > select {
-    flex: 1 1 auto; /* Permite que el selector crezca */
-    min-width: 120px; /* Ancho mínimo para que no se vea mal */
+.lug-gru-wrapper>select {
+    flex: 1 1 auto;
+    /* Permite que el selector crezca */
+    min-width: 120px;
+    /* Ancho mínimo para que no se vea mal */
 }
 
 .lug-gru-wrapper .gru-container {
-    flex-basis: 100%; /* Ocupa toda la línea cuando es visible */
+    flex-basis: 100%;
+    /* Ocupa toda la línea cuando es visible */
     margin-top: 5px;
+}
+
+/* =========================================
+   OPTIMIZACIÓN DE ESPACIO EN LA TABLA
+   ========================================= */
+
+/* 1. Reducir relleno y ajustar fuente en celdas de la tabla */
+th,
+td {
+    padding: 4px 8px !important;
+    font-size: 0.85rem;
+}
+
+/* 2. Reducir la separación vertical entre turnos (Mañana/Tarde) */
+.stacked-cell {
+    gap: 2px !important;
+}
+
+/* 3. Comprimir selectores de Lugar, Grupo y sus botones */
+.lug-gru-wrapper {
+    gap: 2px !important;
+}
+
+/* 4. Optimizar inputs y selects DENTRO de la tabla para que no hereden el padding global de 10px */
+#cuerpoTabla td select,
+#cuerpoTabla td input[type="text"] {
+    padding: 1px 4px !important;
+    margin-bottom: 0 !important;
+    font-size: 0.8rem;
+    height: 24px;
+    /* Obliga a mantener un perfil bajo */
+}
+
+/* 5. Reducir tamaño de los botones de acción en la última columna */
+.btn-lock,
+.btn-assign,
+.btn-add-m,
+.btn-add-t,
+.btn-note,
+.btn-add-gru,
+#cuerpoTabla td:last-child button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    font-size: 0.85rem !important;
+}
+
+/* 6. Ajustar el ancho del contenedor de acciones ya que los botones son más pequeños */
+.th-actions {
+    width: 75px !important;
+    min-width: 75px !important;
+}
+
+/* 7. Comprimir la nota (banner amarillo) para que no ocupe tanto alto */
+.comment-cell {
+    padding: 4px 40px 4px 10px !important;
+    font-size: 0.75rem !important;
+}
+
+/* =========================================
+   OPTIMIZACIÓN DE ESPACIO EN MÓVIL
+   ========================================= */
+@media screen and (max-width: 850px) {
+
+    /* Reducir separación entre las tarjetas (filas) */
+    tr {
+        margin-bottom: 10px !important;
+    }
+
+    /* Reducir padding interno de cada "celda" en la vista móvil */
+    td {
+        padding: 6px 10px !important;
+    }
+
+    /* Achicar un poco los botones de acción para que quepan mejor en pantallas pequeñas */
+    .btn-lock,
+    .btn-assign,
+    .btn-note,
+    .btn-add-m,
+    .btn-add-t,
+    #cuerpoTabla td:last-child button {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1rem !important;
+    }
+
+    td select,
+    td input {
+        font-size: 0.9rem !important;
+        padding: 4px !important;
+        height: auto;
+    }
 }
