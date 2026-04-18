@@ -39,25 +39,16 @@
         return [...new Set(todas)].sort();
     };
 
-    // --- NUEVA LÓGICA DE FORMATEO DE GRUPOS ---
+    // --- FORMATEO DE GRUPOS ---
     const formatearGruposParaPDF = (val) => {
         if (!val || val === "-" || val === "") return "";
-
-        // Separar por el delimitador de almacenamiento
         const listaRaw = val.split(' + ');
-
-        // Limpiar la palabra "Grupo" para quedarse solo con el número/nombre
-        // Ej: "Grupo 1" -> "1", "grupo A" -> "A"
         const listaLimpia = listaRaw
             .map(g => g.replace(/Grupo\s+/gi, '').trim())
             .filter(g => g !== "");
 
         if (listaLimpia.length === 0) return "";
-
-        // Caso: Un solo grupo
         if (listaLimpia.length === 1) return "Grupo " + listaLimpia[0];
-
-        // Caso: Múltiples grupos (1, 2 y 3)
         const ultimo = listaLimpia.pop();
         return "Grupos " + listaLimpia.join(", ") + " y " + ultimo;
     };
@@ -161,9 +152,6 @@
 
             const savedStart = localStorage.getItem(KEYS.START_WEEK);
             state.startOfWeek = savedStart !== null ? parseInt(savedStart) : 1;
-            const selStart = document.getElementById('inicioSemanaSelect');
-            if (selStart) selStart.value = state.startOfWeek;
-
         } catch (e) { console.error("Error loading storage", e); }
     }
 
@@ -180,6 +168,76 @@
         localStorage.setItem(KEYS.EXTRAS, JSON.stringify(state.filasExtras));
         localStorage.setItem(KEYS.COMENTARIOS, JSON.stringify(state.comentarios));
         localStorage.setItem(KEYS.START_WEEK, state.startOfWeek);
+    }
+
+    // --- LÓGICA DE IMPORTACIÓN MULTI-VALOR ---
+    function importarDesdeArchivo(evento, tipo) {
+        const archivo = evento.target.files[0];
+        if (!archivo) return;
+
+        const lector = new FileReader();
+        lector.onload = function (e) {
+            const contenido = e.target.result;
+            const lineas = contenido.split(/\r?\n/);
+            let agregados = 0;
+
+            lineas.forEach(linea => {
+                const lineaLimpia = linea.trim();
+                if (lineaLimpia === "") return;
+
+                // Separamos por comas y limpiamos cada parte
+                const partes = lineaLimpia.split(',').map(p => p.trim()).filter(p => p !== "");
+
+                if (tipo === 'conductor') {
+                    const nombre = partes[0];
+                    if (nombre && !state.conductores.includes(nombre)) {
+                        state.conductores.push(nombre);
+                        agregados++;
+                    }
+                }
+                else if (tipo === 'lugar') {
+                    const nombre = partes[0];
+                    const infoExtra = partes.slice(1); // Todo lo que viene después del nombre
+
+                    if (nombre) {
+                        if (!state.lugares.includes(nombre)) {
+                            state.lugares.push(nombre);
+                            agregados++;
+                        }
+
+                        const territorios = [];
+                        const zonas = [];
+
+                        // Recorremos los extras y los clasificamos
+                        infoExtra.forEach(item => {
+                            // Si tiene un guion es Zona (ej: 8-B), sino es Territorio (ej: 8)
+                            if (item.includes('-')) {
+                                if (!zonas.includes(item)) zonas.push(item);
+                            } else {
+                                if (!territorios.includes(item)) territorios.push(item);
+                            }
+                        });
+
+                        // Guardamos la configuración múltiple para este lugar
+                        state.mapaCoherencia[nombre] = {
+                            ter: territorios,
+                            zon: zonas
+                        };
+                    }
+                }
+            });
+
+            if (agregados > 0) {
+                state.conductores.sort((a, b) => a.localeCompare(b));
+                state.lugares.sort((a, b) => a.localeCompare(b));
+                actualizarTodo();
+                alert(`¡Éxito! Se procesaron ${agregados} elementos.`);
+            } else {
+                alert("No se añadieron elementos nuevos.");
+            }
+            evento.target.value = "";
+        };
+        lector.readAsText(archivo);
     }
 
     // --- ASIGNACIÓN ---
@@ -283,8 +341,6 @@
     function guardarManual(fechaId, valor, rol) {
         if (state.bloqueados[fechaId]) return;
         if (!state.manuales[fechaId]) state.manuales[fechaId] = {};
-
-        // Si el valor está vacío, eliminamos la entrada para permitir reasignación automática si aplica
         if (!valor && valor !== 0) {
             delete state.manuales[fechaId][rol];
         } else {
@@ -329,13 +385,11 @@
         }
     }
 
-    // Permite seleccionar múltiples grupos
     function crearSelectorGrupos(valorActual, locked, onChangeCallback) {
         const container = document.createElement('div');
         container.style.cssText = 'display:flex; flex-direction:column; gap:2px; width:100%';
         let seleccionados = valorActual ? valorActual.split(' + ') : [""];
 
-        // Renderizar selectores existentes
         seleccionados.forEach((val, idx) => {
             const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '2px';
             const sel = document.createElement('select'); sel.style.flex = '1'; sel.add(new Option("-", ""));
@@ -354,7 +408,6 @@
             container.appendChild(row);
         });
 
-        // Botón para añadir otro grupo
         if (!locked) {
             const btnAdd = document.createElement('button'); btnAdd.textContent = '+ Grupo'; btnAdd.style.fontSize = '0.75em';
             btnAdd.onclick = () => { seleccionados.push(""); onChangeCallback(seleccionados.join(' + ')); };
@@ -377,12 +430,9 @@
     function renderSelectorDias() {
         if (!els.diasContainer) return;
         els.diasContainer.innerHTML = '';
-
         let ordenDias = [];
         let start = state.startOfWeek;
-        for (let i = 0; i < 7; i++) {
-            ordenDias.push((start + i) % 7);
-        }
+        for (let i = 0; i < 7; i++) { ordenDias.push((start + i) % 7); }
 
         ordenDias.forEach((i) => {
             const n = DIAS_SEMANA[i];
@@ -426,11 +476,9 @@
             const locked = state.bloqueados[id];
             const dNum = f.getDay();
             const cfg = state.configDias[dNum];
-
             const esFinde = (dNum === 0 || dNum === 6);
             const hM = esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m;
             const hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
-
             const showM = cfg.m;
             const showT = cfg.t && hT !== '';
             const extras = state.filasExtras[id] || [];
@@ -446,19 +494,11 @@
                 const spanTexto = document.createElement('span');
                 spanTexto.textContent = comentario.toUpperCase();
                 tdCom.appendChild(spanTexto);
-
                 if (!locked) {
                     const btnDelNote = document.createElement('button');
                     btnDelNote.className = 'btn-delete-note';
                     btnDelNote.innerHTML = '&times;';
-                    btnDelNote.title = "Eliminar nota";
-                    btnDelNote.onclick = (e) => {
-                        e.stopPropagation();
-                        if (confirm("¿Eliminar esta nota?")) {
-                            delete state.comentarios[id];
-                            actualizarTodo();
-                        }
-                    };
+                    btnDelNote.onclick = (e) => { e.stopPropagation(); if (confirm("¿Eliminar?")) { delete state.comentarios[id]; actualizarTodo(); } };
                     tdCom.appendChild(btnDelNote);
                 }
                 trCom.appendChild(tdCom);
@@ -469,13 +509,11 @@
             if (locked) tr.style.opacity = "0.7";
 
             const tdF = tr.insertCell();
-            tdF.setAttribute('data-label', 'Fecha');
             tdF.innerHTML = `<b>${DIAS_SEMANA[dNum].slice(0, 3)}</b><br>${f.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`;
             tdF.rowSpan = 1 + extras.length;
             tdF.style.verticalAlign = 'top';
 
             const tdH = tr.insertCell();
-            tdH.setAttribute('data-label', 'Horario');
             tdH.innerHTML = `<div class="stacked-cell">
             ${showM ? `<div class="time-text ${showT ? 'border-bottom' : ''}">${hM || '--:--'}</div>` : ''}
             ${showT ? `<div class="time-text">${hT}</div>` : ''}
@@ -483,64 +521,41 @@
 
             state.colOrder.forEach(tipo => {
                 const td = tr.insertCell();
-                td.setAttribute('data-label', COL_DEFS[tipo]);
                 const cont = document.createElement('div');
                 cont.className = 'stacked-cell';
-
                 ['M', 'T'].forEach(turno => {
                     if ((turno === 'M' && !showM) || (turno === 'T' && !showT)) return;
-
                     if (tipo === 'lug') {
                         const wrapper = document.createElement('div');
                         wrapper.className = 'lug-gru-wrapper';
                         const key = `${id}-${turno}`;
-
                         const btn = document.createElement('button');
                         btn.className = 'btn-add-gru';
-                        // --- CAMBIO SOLICITADO: Tooltip ---
                         btn.title = "Agregar Grupo";
-
                         const s = document.createElement('select');
                         s.disabled = locked;
                         s.add(new Option("-", ""));
                         state.lugares.forEach(o => s.add(new Option(o, o, false, datos[`lug${turno}`] === o)));
                         s.onchange = (e) => guardarManual(id, e.target.value, `lug${turno}`);
-
                         const gruContainer = document.createElement('div');
                         gruContainer.className = 'gru-container';
-
                         const isOpen = !!state.uiState.openGroups[key];
                         gruContainer.style.display = isOpen ? 'block' : 'none';
                         btn.textContent = isOpen ? '-' : '+';
-
                         const gruSelector = crearSelectorGrupos(datos[`gru${turno}`], locked, (v) => guardarManual(id, v, `gru${turno}`));
                         gruContainer.appendChild(gruSelector);
-
-                        btn.onclick = () => {
-                            state.uiState.openGroups[key] = !state.uiState.openGroups[key];
-                            actualizarTodo();
-                        };
-
-                        wrapper.appendChild(btn);
-                        wrapper.appendChild(s);
-                        wrapper.appendChild(gruContainer);
+                        btn.onclick = () => { state.uiState.openGroups[key] = !state.uiState.openGroups[key]; actualizarTodo(); };
+                        wrapper.appendChild(btn); wrapper.appendChild(s); wrapper.appendChild(gruContainer);
                         cont.appendChild(wrapper);
                     } else if (tipo === 'gru') {
                         cont.appendChild(crearSelectorGrupos(datos[`gru${turno}`], locked, (v) => guardarManual(id, v, `gru${turno}`)));
                     } else if (tipo === 'cua') {
-                        const i = Object.assign(document.createElement('input'), {
-                            type: 'text', className: 'input-cuadra', value: datos[`cua${turno}`] || "", disabled: locked
-                        });
+                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: datos[`cua${turno}`] || "", disabled: locked });
                         i.onchange = (e) => guardarManual(id, e.target.value, `cua${turno}`);
                         cont.appendChild(i);
                     } else {
-                        const s = document.createElement('select');
-                        s.disabled = locked;
-                        s.add(new Option("-", ""));
-                        let ops = (tipo === 'cond') ? state.conductores :
-                            (tipo === 'ter' ? (state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios()) :
-                                (state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas()));
-
+                        const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
+                        let ops = (tipo === 'cond') ? state.conductores : (tipo === 'ter' ? (state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios()) : (state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas()));
                         ops.forEach(o => s.add(new Option(o, o, false, datos[`${tipo}${turno}`] === o)));
                         s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`);
                         cont.appendChild(s);
@@ -550,244 +565,122 @@
             });
 
             const tdA = tr.insertCell();
-            tdA.setAttribute('data-label', 'Acciones');
-            tdA.innerHTML = `
-            <div class="actions-wrapper">
-                <div class="main-actions">
-                    <button class="btn-lock" title="Bloquear">${locked ? '🔒' : '🔓'}</button>
-                    <button class="btn-assign" title="Reasignar" ${locked ? 'disabled' : ''}>↻</button>
-                    <button class="btn-note" title="Añadir Nota">📝</button>
-                </div>
-                <div class="extra-actions">
-                    ${showM ? '<button class="btn-add-m" title="Añadir fila extra mañana">+M</button>' : ''}
-                    ${showT ? '<button class="btn-add-t" title="Añadir fila extra tarde">+T</button>' : ''}
-                </div>
-            </div>`;
-
+            tdA.innerHTML = `<div class="actions-wrapper"><div class="main-actions">
+                <button class="btn-lock" title="Bloquear">${locked ? '🔒' : '🔓'}</button>
+                <button class="btn-assign" title="Reasignar" ${locked ? 'disabled' : ''}>↻</button>
+                <button class="btn-note" title="Añadir Nota">📝</button>
+                </div><div class="extra-actions">
+                ${showM ? '<button class="btn-add-m" title="Extra mañana">+M</button>' : ''}
+                ${showT ? '<button class="btn-add-t" title="Extra tarde">+T</button>' : ''}
+                </div></div>`;
             tdA.querySelector('.btn-lock').onclick = () => { state.bloqueados[id] = !state.bloqueados[id]; actualizarTodo(); };
             tdA.querySelector('.btn-assign').onclick = () => { asignarGenerico('conductor', id); asignarGenerico('territorio', id); };
             tdA.querySelector('.btn-note').onclick = () => {
                 const actual = state.comentarios[id] || "";
-                const nuevo = prompt("Nota para este día (ej: Asamblea):", actual);
-                if (nuevo !== null) {
-                    if (nuevo.trim() === "") delete state.comentarios[id];
-                    else state.comentarios[id] = nuevo;
-                    actualizarTodo();
-                }
+                const nuevo = prompt("Nota:", actual);
+                if (nuevo !== null) { if (nuevo.trim() === "") delete state.comentarios[id]; else state.comentarios[id] = nuevo; actualizarTodo(); }
             };
             if (showM) tdA.querySelector('.btn-add-m').onclick = () => agregarFilaExtra(id, 'M');
             if (showT) tdA.querySelector('.btn-add-t').onclick = () => agregarFilaExtra(id, 'T');
-
             els.tablaBody.appendChild(tr);
 
             extras.forEach(ex => {
-                const trx = document.createElement('tr');
-                if (locked) trx.style.opacity = "0.7";
-
+                const trx = document.createElement('tr'); if (locked) trx.style.opacity = "0.7";
                 const tdExH = trx.insertCell();
-                tdExH.setAttribute('data-label', 'Hora');
                 tdExH.innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? '#2196F3' : '#FF9800'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
-
                 state.colOrder.forEach(t => {
                     const tdEx = trx.insertCell();
-                    tdEx.setAttribute('data-label', COL_DEFS[t]);
                     if (t === 'lug') {
-                        const wrapper = document.createElement('div');
-                        wrapper.className = 'lug-gru-wrapper';
-                        const key = ex.id;
-
-                        const btn = document.createElement('button');
-                        btn.className = 'btn-add-gru';
-                        // --- CAMBIO SOLICITADO: Tooltip ---
-                        btn.title = "Agregar Grupo";
-
-                        const s = document.createElement('select');
-                        s.disabled = locked;
-                        s.add(new Option("-", ""));
+                        const wrapper = document.createElement('div'); wrapper.className = 'lug-gru-wrapper';
+                        const key = ex.id; const btn = document.createElement('button'); btn.className = 'btn-add-gru'; btn.title = "Agregar Grupo";
+                        const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
                         state.lugares.forEach(o => s.add(new Option(o, o, false, ex.lug === o)));
                         s.onchange = (e) => guardarExtra(id, ex.id, 'lug', e.target.value);
-
-                        const gruContainer = document.createElement('div');
-                        gruContainer.className = 'gru-container';
-
-                        const isOpen = !!state.uiState.openGroups[key];
-                        gruContainer.style.display = isOpen ? 'block' : 'none';
-                        btn.textContent = isOpen ? '-' : '+';
-
+                        const gruContainer = document.createElement('div'); gruContainer.className = 'gru-container';
+                        const isOpen = !!state.uiState.openGroups[key]; gruContainer.style.display = isOpen ? 'block' : 'none'; btn.textContent = isOpen ? '-' : '+';
                         const gruSelector = crearSelectorGrupos(ex.gru, locked, (v) => guardarExtra(id, ex.id, 'gru', v));
                         gruContainer.appendChild(gruSelector);
-
-                        btn.onclick = () => {
-                            state.uiState.openGroups[key] = !state.uiState.openGroups[key];
-                            actualizarTodo();
-                        };
-
-                        wrapper.appendChild(btn);
-                        wrapper.appendChild(s);
-                        wrapper.appendChild(gruContainer);
-                        tdEx.appendChild(wrapper);
-                    } else if (t === 'gru') {
-                        tdEx.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v)));
-                    } else if (t === 'cua') {
-                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked });
-                        i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
-                        tdEx.appendChild(i);
-                    } else {
+                        btn.onclick = () => { state.uiState.openGroups[key] = !state.uiState.openGroups[key]; actualizarTodo(); };
+                        wrapper.appendChild(btn); wrapper.appendChild(s); wrapper.appendChild(gruContainer); tdEx.appendChild(wrapper);
+                    } else if (t === 'gru') { tdEx.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v))); }
+                    else if (t === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked }); i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(i); }
+                    else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
                         let ops = (t === 'cond' ? state.conductores : t === 'ter' ? (state.mapaCoherencia[ex.lug]?.ter || getRangoTerritorios()) : (state.mapaCoherencia[ex.lug]?.zon.filter(z => z.startsWith(ex.ter + '-')) || getRangoZonas()));
                         ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o)));
-                        s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
-                        tdEx.appendChild(s);
+                        s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(s);
                     }
                 });
-
                 const tdAx = trx.insertCell();
-                tdAx.setAttribute('data-label', 'Eliminar');
-                const wrap = document.createElement('div'); wrap.className = 'actions-wrapper';
-                const bDel = document.createElement('button');
-                bDel.innerHTML = 'Eliminar fila &times;';
-                bDel.style.color = 'red';
-                bDel.style.width = '100%';
-                bDel.disabled = locked;
-                bDel.onclick = () => eliminarFilaExtra(id, ex.id);
-                wrap.appendChild(bDel);
-                tdAx.appendChild(wrap);
-                els.tablaBody.appendChild(trx);
+                const bDel = document.createElement('button'); bDel.innerHTML = 'Eliminar &times;'; bDel.style.color = 'red'; bDel.disabled = locked; bDel.onclick = () => eliminarFilaExtra(id, ex.id);
+                tdAx.appendChild(bDel); els.tablaBody.appendChild(trx);
             });
         });
-
         const ids = fechas.map(f => f.toISOString().split('T')[0]);
-        els.btnBloquear.innerHTML = (ids.length > 0 && ids.every(i => state.bloqueados[i])) ? '🔓 Desbloquear Todo' : '🔒 Bloquear Todo';
+        els.btnBloquear.innerHTML = (ids.length > 0 && ids.every(i => state.bloqueados[i])) ? ' Desbloquear Todo' : ' Bloquear Todo';
     }
 
     function actualizarTodo() { renderListas(); renderColumnSelector(); renderSelectorDias(); renderTabla(); saveToStorage(); }
 
-    // --- PDF EXPORT ---
     function exportarPDF() {
         const formatTime12Hour = (time24) => {
             if (!time24 || !time24.includes(':')) return '--:--';
             const [hours, minutes] = time24.split(':');
             let h = parseInt(hours, 10);
             const ampm = h >= 12 ? 'pm' : 'am';
-            h = h % 12;
-            h = h ? h : 12;
+            h = h % 12 || 12;
             return `${h}:${minutes} ${ampm}`;
         };
-
         if (!window.jspdf) return alert("jsPDF no cargado.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         const fechas = generarFechasDiarias();
-        if (fechas.length === 0) return alert("No hay fechas.");
+        if (fechas.length === 0) return alert("Sin fechas.");
 
-        const semanas = [];
-        let semActual = [];
-
+        const semanas = []; let semActual = [];
         fechas.forEach((f, i) => {
             semActual.push(f);
             const sig = fechas[i + 1];
-            if (!sig || sig.getDay() === state.startOfWeek) {
-                semanas.push([...semActual]);
-                semActual = [];
-            }
+            if (!sig || sig.getDay() === state.startOfWeek) { semanas.push([...semActual]); semActual = []; }
         });
 
         const pdfHeaders = ['DÍA', 'HORA', ...state.colOrder.map(k => COL_DEFS[k].toUpperCase())];
-        let currentY = 12; // Margen superior inicial reducido
-
-        // Título del documento (Toma el mes de la primera fecha seleccionada)
+        let currentY = 12;
         const mesDoc = fechas[0].toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-        const anioDoc = fechas[0].getFullYear();
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.text(`PROGRAMA DE SERVICIO - ${mesDoc} ${anioDoc}`, 105, currentY, { align: 'center' });
-
-        currentY += 4; // Espacio entre el título y la tabla
-
-        // Aquí guardaremos TODAS las filas del mes para usar una sola tabla
+        doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+        doc.text(`PROGRAMA DE SERVICIO - ${mesDoc} ${fechas[0].getFullYear()}`, 105, currentY, { align: 'center' });
+        currentY += 4;
         const allRows = [];
 
-        semanas.forEach((semana, idx) => {
-            const fI = semana[0];
-            const fF = semana[semana.length - 1];
-            const mesI = fI.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-            const mesF = fF.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-
-            const tituloSemana = `SEMANA DEL ${fI.getDate()} DE ${mesI} AL ${fF.getDate()} DE ${mesF}`;
-
-            // Fila separadora de semana
+        semanas.forEach(semana => {
+            const fI = semana[0], fF = semana[semana.length - 1];
             allRows.push([{
-                content: tituloSemana,
-                colSpan: pdfHeaders.length,
-                styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 7.5, cellPadding: 0.8 }
+                content: `SEMANA DEL ${fI.getDate()} AL ${fF.getDate()} DE ${fF.toLocaleString('es-ES', { month: 'long' }).toUpperCase()}`,
+                colSpan: pdfHeaders.length, styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 7.5 }
             }]);
-
             semana.forEach(f => {
                 const id = f.toISOString().split('T')[0];
-
                 if (state.comentarios[id]) {
-                    allRows.push([{
-                        content: state.comentarios[id].toUpperCase(),
-                        colSpan: pdfHeaders.length,
-                        styles: {
-                            halign: 'center',
-                            fillColor: [255, 253, 208],
-                            textColor: [50, 50, 50],
-                            fontStyle: 'bolditalic',
-                            fontSize: 7,
-                            cellPadding: 1
-                        }
-                    }]);
+                    allRows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: pdfHeaders.length, styles: { halign: 'center', fillColor: [255, 253, 208], fontStyle: 'bolditalic', fontSize: 7 } }]);
                 }
-
-                const d = obtenerDatosDia(id);
-                const dNum = f.getDay();
-                const cfg = state.configDias[dNum];
-                const esFinde = (dNum === 0 || dNum === 6);
-                const hM = esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m;
-                const hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
-                const extras = state.filasExtras[id] || [];
-                const showM = cfg.m;
-                const showT = cfg.t && hT !== '';
-
-                let esPrimeraFilaDelDia = true;
-                const totalR = (showM ? 1 : 0) + (showT ? 1 : 0) + extras.length;
+                const d = obtenerDatosDia(id), dNum = f.getDay(), cfg = state.configDias[dNum];
+                const esFinde = (dNum === 0 || dNum === 6), hM = esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m, hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
+                const extras = state.filasExtras[id] || [], showM = cfg.m, showT = cfg.t && hT !== '';
+                let esPrimeraFilaDelDia = true; const totalR = (showM ? 1 : 0) + (showT ? 1 : 0) + extras.length;
 
                 const addRow = (hora, source, turnoLetra = '') => {
                     const row = [];
-                    if (esPrimeraFilaDelDia) {
-                        row.push({
-                            content: `${DIAS_SEMANA[dNum].slice(0, 3).toUpperCase()} ${f.getDate()}`,
-                            rowSpan: totalR,
-                            styles: { fontStyle: 'bold', valign: 'middle' }
-                        });
-                        esPrimeraFilaDelDia = false;
-                    }
+                    if (esPrimeraFilaDelDia) { row.push({ content: `${DIAS_SEMANA[dNum].slice(0, 3).toUpperCase()} ${f.getDate()}`, rowSpan: totalR, styles: { fontStyle: 'bold', valign: 'middle' } }); esPrimeraFilaDelDia = false; }
                     row.push(formatTime12Hour(hora));
                     state.colOrder.forEach(k => {
                         let val = turnoLetra ? source[`${k}${turnoLetra}`] : source[k];
-
-                        if (k === 'lug') {
-                            const rawGru = turnoLetra ? source[`gru${turnoLetra}`] : source['gru'];
-                            const gruTxt = formatearGruposParaPDF(rawGru);
-                            const lugTxt = val || "-";
-
-                            if (gruTxt) {
-                                val = `${gruTxt}   |   ${lugTxt}`;
-                            } else {
-                                val = lugTxt;
-                            }
-                        } else if (k === 'gru') {
-                            val = formatearGruposParaPDF(val) || "-";
-                        } else {
-                            val = val || "-";
-                        }
-
+                        if (k === 'lug') { const gru = formatearGruposParaPDF(turnoLetra ? source[`gru${turnoLetra}`] : source['gru']); val = gru ? `${gru} | ${val || "-"}` : (val || "-"); }
+                        else if (k === 'gru') { val = formatearGruposParaPDF(val) || "-"; }
+                        else val = val || "-";
                         row.push(val);
                     });
                     allRows.push(row);
                 };
-
                 if (showM) addRow(hM, d, 'M');
                 extras.filter(e => e.turno === 'M').forEach(ex => addRow(hM, ex));
                 if (showT) addRow(hT, d, 'T');
@@ -795,123 +688,70 @@
             });
         });
 
-        // Generamos UNA SOLA tabla con todas las semanas juntas
         doc.autoTable({
-            head: [pdfHeaders],
-            body: allRows,
-            startY: currentY,
-            theme: 'grid',
-            // OPTIMIZACIONES DE ESPACIO PARA QUE QUEPA UN MES:
-            styles: {
-                fontSize: 8.5,           // <-- Tamaño de letra un poco más grande
-                fontStyle: 'bold',       // <-- Letra en negrita para toda la tabla
-                cellPadding: 0.8,
-                halign: 'center',
-                overflow: 'linebreak'
-            },
-            headStyles: {
-                fillColor: [44, 62, 80],
-                textColor: 255,
-                fontSize: 9              // <-- Encabezados un poco más grandes también
-            },
-            margin: { left: 8, right: 8, top: 12, bottom: 10 },
-            rowPageBreak: 'avoid'
+            head: [pdfHeaders], body: allRows, startY: currentY, theme: 'grid',
+            styles: { fontSize: 8.5, fontStyle: 'bold', cellPadding: 0.8, halign: 'center' },
+            headStyles: { fillColor: [44, 62, 80], textColor: 255 }, margin: { left: 8, right: 8 }, rowPageBreak: 'avoid'
         });
-
         doc.save(`Programa_Servicio.pdf`);
     }
 
     function init() {
         loadFromStorage();
-
+        // --- TEMA ---
         const handleTheme = () => {
             const el = document.documentElement;
-            const savedTheme = localStorage.getItem(KEYS.THEME);
-            const applyTheme = (theme) => { el.setAttribute('data-theme', theme); };
-            const toggleTheme = () => {
-                const currentTheme = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-                applyTheme(currentTheme);
-                localStorage.setItem(KEYS.THEME, currentTheme);
-            };
-            document.getElementById('btnToggleTheme').onclick = toggleTheme;
-            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            mediaQuery.addEventListener('change', (e) => {
-                if (!localStorage.getItem(KEYS.THEME)) { applyTheme(e.matches ? 'dark' : 'light'); }
-            });
-            if (savedTheme) { applyTheme(savedTheme); } else { applyTheme(mediaQuery.matches ? 'dark' : 'light'); }
+            const applyTheme = (t) => { el.setAttribute('data-theme', t); localStorage.setItem(KEYS.THEME, t); };
+            document.getElementById('btnToggleTheme').onclick = () => applyTheme(el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+            const saved = localStorage.getItem(KEYS.THEME) || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            el.setAttribute('data-theme', saved);
         };
-
         handleTheme();
 
+        // --- CONFIGURACIÓN INICIAL ---
         if (!els.fInicio.value) els.fInicio.value = new Date().toISOString().split('T')[0];
         els.hManana.value = state.horario.m; els.hTarde.value = state.horario.t; els.hMananaFin.value = state.horario.mFin; els.hTardeFin.value = state.horario.tFin;
+
+        // --- EVENTOS ---
         els.diasContainer.onchange = (e) => { if (e.target.type === 'checkbox') { state.configDias[e.target.dataset.day][e.target.dataset.shift] = e.target.checked; actualizarTodo(); } };
         els.fInicio.onchange = () => ajustarFechas('combo'); els.fFinal.onchange = () => ajustarFechas('final'); els.cantFechas.onchange = () => ajustarFechas('combo');
+
         document.getElementById('btnAgregarConductor').onclick = () => modificarLista('conductor', 'agregar');
         document.getElementById('btnAgregarLugar').onclick = () => modificarLista('lugar', 'agregar');
         document.getElementById('btnAgregarGrupo').onclick = () => modificarLista('grupo', 'agregar');
         document.getElementById('btnLimpiarGrupos').onclick = () => modificarLista('grupo', 'borrarTodo');
         document.querySelectorAll('.btn-export').forEach(btn => btn.onclick = exportarPDF);
+
+        // --- EVENTOS DE IMPORTACIÓN ---
+        const inputConductores = document.getElementById('fileConductores');
+        if (inputConductores) inputConductores.addEventListener('change', (e) => importarDesdeArchivo(e, 'conductor'));
+        const inputLugares = document.getElementById('fileLugares');
+        if (inputLugares) inputLugares.addEventListener('change', (e) => importarDesdeArchivo(e, 'lugar'));
+
         document.getElementById('btnAsignarConductores').onclick = () => asignarGenerico('conductor');
         document.getElementById('btnAsignarTerritorios').onclick = () => asignarGenerico('territorio');
-        document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar todo?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
+        document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
         els.btnBloquear.onclick = () => { const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]), all = ids.every(i => state.bloqueados[i]); ids.forEach(i => state.bloqueados[i] = !all); actualizarTodo(); };
 
-        const layout = document.querySelector('.main-layout');
-        const sidebarIcon = document.getElementById('sidebarIcon');
-        const sidebarText = document.getElementById('sidebarText');
-
-        const actualizarInterfazBoton = () => {
-            const esMovil = window.innerWidth <= 850;
-            const estaOculto = layout.classList.contains('sidebar-hidden');
-
-            if (esMovil) {
-                sidebarIcon.textContent = estaOculto ? "⚙️" : "❌";
-                sidebarText.textContent = estaOculto ? "Configuración" : "Cerrar";
-            } else {
-                sidebarIcon.textContent = estaOculto ? "➡️" : "⬅️";
-                sidebarText.textContent = estaOculto ? "Mostrar" : "Ocultar";
-            }
+        // --- SIDEBAR ---
+        const layout = document.querySelector('.main-layout'), sIcon = document.getElementById('sidebarIcon'), sText = document.getElementById('sidebarText');
+        const updateUI = () => {
+            const isH = layout.classList.contains('sidebar-hidden'), isM = window.innerWidth <= 850;
+            sIcon.textContent = isM ? (isH ? "⚙️" : "❌") : (isH ? "➡️" : "⬅️");
+            sText.textContent = isM ? (isH ? "Configuración" : "Cerrar") : (isH ? "Mostrar" : "Ocultar");
         };
-
-        document.getElementById('toggleSidebar').onclick = () => {
-            layout.classList.toggle('sidebar-hidden');
-            actualizarInterfazBoton();
-            setTimeout(() => { if (typeof actualizarTodo === 'function') actualizarTodo(); }, 300);
-        };
-
-        const overlay = document.getElementById('sidebarOverlay');
-        if (overlay) {
-            overlay.onclick = () => {
-                if (!layout.classList.contains('sidebar-hidden')) {
-                    layout.classList.add('sidebar-hidden');
-                    actualizarInterfazBoton();
-                    setTimeout(() => { if (typeof actualizarTodo === 'function') actualizarTodo(); }, 300);
-                }
-            };
-        }
-
-        window.addEventListener('resize', actualizarInterfazBoton);
-        actualizarInterfazBoton();
-
-        if (window.innerWidth <= 850) {
-            layout.classList.add('sidebar-hidden');
-        } else {
-            layout.classList.remove('sidebar-hidden');
-        }
-        actualizarInterfazBoton();
+        document.getElementById('toggleSidebar').onclick = () => { layout.classList.toggle('sidebar-hidden'); updateUI(); setTimeout(actualizarTodo, 300); };
+        window.onresize = updateUI;
+        if (window.innerWidth <= 850) layout.classList.add('sidebar-hidden');
+        updateUI();
 
         document.getElementById('btnFijarHorario').onclick = () => { state.horario = { m: els.hManana.value, t: els.hTarde.value, mFin: els.hMananaFin.value, tFin: els.hTardeFin.value }; actualizarTodo(); };
-        document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = () => { document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active')); document.getElementById(btn.dataset.tab + 'Pane').classList.add('active'); });
-
+        document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = () => {
+            document.querySelectorAll('.tab-button, .tab-pane').forEach(el => el.classList.remove('active'));
+            btn.classList.add('active'); document.getElementById(btn.dataset.tab + 'Pane').classList.add('active');
+        });
         const selStart = document.getElementById('inicioSemanaSelect');
-        if (selStart) {
-            selStart.value = state.startOfWeek;
-            selStart.onchange = (e) => {
-                state.startOfWeek = parseInt(e.target.value);
-                actualizarTodo();
-            };
-        }
+        if (selStart) { selStart.value = state.startOfWeek; selStart.onchange = (e) => { state.startOfWeek = parseInt(e.target.value); actualizarTodo(); }; }
 
         ajustarFechas('combo');
     }
