@@ -997,6 +997,42 @@ td {
     font-size: 0.75rem !important;
 }
 
+.participant-item-complex {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.tag-container {
+    display: flex;
+    gap: 2px;
+    margin: 0 5px;
+}
+
+.btn-tag {
+    font-size: 0.7em;
+    padding: 2px 4px;
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+    cursor: pointer;
+    border-radius: 3px;
+    color: #666;
+}
+
+.btn-tag.active {
+    background: #2196F3;
+    color: white;
+    border-color: #1976D2;
+}
+
+[data-theme="dark"] .btn-tag {
+    background: #444;
+    color: #bbb;
+}
+
 /* =========================================
    OPTIMIZACIÓN DE ESPACIO EN MÓVIL
    ========================================= */
