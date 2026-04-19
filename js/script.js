@@ -134,7 +134,13 @@
     // --- PERSISTENCIA ---
     function loadFromStorage() {
         try {
-            state.conductores = JSON.parse(localStorage.getItem(KEYS.CONDUCTORES)) || [];
+            const rawCond = JSON.parse(localStorage.getItem(KEYS.CONDUCTORES)) || [];
+            // Migración: Convierte strings antiguos en objetos y asegura que los tags sean números
+            state.conductores = rawCond.map(c => {
+                if (typeof c === 'string') return { name: c, tags: [] };
+                return { ...c, tags: Array.isArray(c.tags) ? c.tags.map(Number) : [] };
+            });
+
             state.lugares = JSON.parse(localStorage.getItem(KEYS.LUGARES)) || INITIAL_LUGARES;
             state.grupos = JSON.parse(localStorage.getItem(KEYS.GRUPOS)) || [];
             state.mapaCoherencia = JSON.parse(localStorage.getItem(KEYS.MAPA)) || INITIAL_MAPA;
@@ -185,19 +191,18 @@
                 const lineaLimpia = linea.trim();
                 if (lineaLimpia === "") return;
 
-                // Separamos por comas y limpiamos cada parte
                 const partes = lineaLimpia.split(',').map(p => p.trim()).filter(p => p !== "");
 
                 if (tipo === 'conductor') {
                     const nombre = partes[0];
-                    if (nombre && !state.conductores.includes(nombre)) {
-                        state.conductores.push(nombre);
+                    if (nombre && !state.conductores.some(c => c.name === nombre)) {
+                        state.conductores.push({ name: nombre, tags: [] });
                         agregados++;
                     }
                 }
                 else if (tipo === 'lugar') {
                     const nombre = partes[0];
-                    const infoExtra = partes.slice(1); // Todo lo que viene después del nombre
+                    const infoExtra = partes.slice(1);
 
                     if (nombre) {
                         if (!state.lugares.includes(nombre)) {
@@ -208,9 +213,7 @@
                         const territorios = [];
                         const zonas = [];
 
-                        // Recorremos los extras y los clasificamos
                         infoExtra.forEach(item => {
-                            // Si tiene un guion es Zona (ej: 8-B), sino es Territorio (ej: 8)
                             if (item.includes('-')) {
                                 if (!zonas.includes(item)) zonas.push(item);
                             } else {
@@ -218,7 +221,6 @@
                             }
                         });
 
-                        // Guardamos la configuración múltiple para este lugar
                         state.mapaCoherencia[nombre] = {
                             ter: territorios,
                             zon: zonas
@@ -228,7 +230,7 @@
             });
 
             if (agregados > 0) {
-                state.conductores.sort((a, b) => a.localeCompare(b));
+                state.conductores.sort((a, b) => a.name.localeCompare(b.name));
                 state.lugares.sort((a, b) => a.localeCompare(b));
                 actualizarTodo();
                 alert(`¡Éxito! Se procesaron ${agregados} elementos.`);
@@ -250,24 +252,33 @@
             if ((targetId && id !== targetId) || state.bloqueados[id]) return;
             if (!state.asignaciones[id]) state.asignaciones[id] = {};
             const asig = state.asignaciones[id];
+
             if (tipo === 'conductor') { delete asig.condM; delete asig.condT; }
             else { ['lug', 'ter', 'zon'].forEach(k => { delete asig[k + 'M']; delete asig[k + 'T']; }); }
+
             const diaNum = f.getDay();
             const configDia = state.configDias[diaNum];
             const esFinde = (diaNum === 0 || diaNum === 6);
             const horaTarde = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
             const usarTarde = configDia.t && horaTarde !== '';
             const usadosHoy = [];
+
             ['M', 'T'].forEach(turno => {
                 if (turno === 'T' && !usarTarde) return;
                 if (turno === 'M' && !configDia.m) return;
+
                 if (tipo === 'conductor') {
                     const manual = state.manuales[id]?.[`cond${turno}`];
                     if (manual) usadosHoy.push(manual);
                     else {
-                        const pool = state.conductores.filter(c => !usadosHoy.includes(c));
+                        // Filtro de etiquetas de día corregido
+                        const pool = state.conductores.filter(c => {
+                            const noUsado = !usadosHoy.includes(c.name);
+                            const disponibleHoy = c.tags.length === 0 || c.tags.some(t => Number(t) === diaNum);
+                            return noUsado && disponibleHoy;
+                        });
                         const elegido = pool[Math.floor(Math.random() * pool.length)];
-                        if (elegido) { asig[`cond${turno}`] = elegido; usadosHoy.push(elegido); }
+                        if (elegido) { asig[`cond${turno}`] = elegido.name; usadosHoy.push(elegido.name); }
                     }
                 } else {
                     const manualLug = state.manuales[id]?.[`lug${turno}`];
@@ -316,6 +327,13 @@
 
         if (accion === 'agregar') {
             const raw = input.value.trim(); if (!raw) return;
+            if (tipo === 'conductor') {
+                if (!lista.some(c => c.name === raw)) {
+                    lista.push({ name: raw, tags: [] });
+                    input.value = ''; actualizarTodo();
+                }
+                return;
+            }
             if (tipo === 'grupo') {
                 const range = raw.match(/^(\d+)-(\d+)$/);
                 if (range) {
@@ -334,7 +352,11 @@
                 lista.push(raw); input.value = ''; actualizarTodo();
             }
         } else if (accion === 'eliminar') {
-            if (confirm(`¿Eliminar "${lista[indice]}"?`)) { if (tipo === 'lugar') delete state.mapaCoherencia[lista[indice]]; lista.splice(indice, 1); actualizarTodo(); }
+            const itemName = (tipo === 'conductor') ? lista[indice].name : lista[indice];
+            if (confirm(`¿Eliminar "${itemName}"?`)) {
+                if (tipo === 'lugar') delete state.mapaCoherencia[lista[indice]];
+                lista.splice(indice, 1); actualizarTodo();
+            }
         } else if (accion === 'borrarTodo') { if (confirm("¿Borrar todos?")) { state.grupos = []; actualizarTodo(); } }
     }
 
@@ -449,8 +471,34 @@
         const draw = (l, container, tipo) => {
             container.innerHTML = '';
             l.forEach((item, i) => {
-                const li = document.createElement('li'); li.innerHTML = `<span>${item}</span>`;
-                const btn = document.createElement('button'); btn.textContent = '×'; btn.onclick = () => modificarLista(tipo, 'eliminar', i);
+                const li = document.createElement('li');
+                if (tipo === 'conductor') li.className = 'participant-item-complex';
+
+                const spanName = document.createElement('span');
+                spanName.textContent = (tipo === 'conductor') ? item.name : item;
+                li.appendChild(spanName);
+
+                if (tipo === 'conductor') {
+                    const tagCont = document.createElement('div');
+                    tagCont.className = 'tag-container';
+                    ['D', 'L', 'M', 'Mi', 'J', 'V', 'S'].forEach((letra, idx) => {
+                        const btn = document.createElement('button');
+                        btn.textContent = letra;
+                        // Corrección: Comprobación estricta de números para los estilos de la etiqueta
+                        btn.className = `btn-tag ${item.tags.some(t => Number(t) === idx) ? 'active' : ''}`;
+                        btn.onclick = () => {
+                            // Corrección: Modificación estricta por números
+                            if (item.tags.some(t => Number(t) === idx)) item.tags = item.tags.filter(t => Number(t) !== idx);
+                            else item.tags.push(Number(idx));
+                            actualizarTodo();
+                        };
+                        tagCont.appendChild(btn);
+                    });
+                    li.appendChild(tagCont);
+                }
+
+                const btn = document.createElement('button'); btn.textContent = '×';
+                btn.onclick = () => modificarLista(tipo, 'eliminar', i);
                 li.appendChild(btn); container.appendChild(li);
             });
         };
@@ -555,7 +603,18 @@
                         cont.appendChild(i);
                     } else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
-                        let ops = (tipo === 'cond') ? state.conductores : (tipo === 'ter' ? (state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios()) : (state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas()));
+                        let ops = [];
+                        if (tipo === 'cond') {
+                            // Corrección: Filtro visual convertido estrictamente a número en el selector
+                            ops = state.conductores.filter(c => c.tags.length === 0 || c.tags.some(t => Number(t) === dNum)).map(c => c.name);
+                            const actual = datos[`cond${turno}`];
+                            if (actual && !ops.includes(actual)) ops.push(actual); // Mantenerlo si fue asignado manualmente
+                        } else if (tipo === 'ter') {
+                            ops = state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios();
+                        } else if (tipo === 'zon') {
+                            ops = state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas();
+                        }
+
                         ops.forEach(o => s.add(new Option(o, o, false, datos[`${tipo}${turno}`] === o)));
                         s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`);
                         cont.appendChild(s);
@@ -606,7 +665,17 @@
                     else if (t === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked }); i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(i); }
                     else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
-                        let ops = (t === 'cond' ? state.conductores : t === 'ter' ? (state.mapaCoherencia[ex.lug]?.ter || getRangoTerritorios()) : (state.mapaCoherencia[ex.lug]?.zon.filter(z => z.startsWith(ex.ter + '-')) || getRangoZonas()));
+                        let ops = [];
+                        if (t === 'cond') {
+                            // Corrección también para las filas extras
+                            ops = state.conductores.filter(c => c.tags.length === 0 || c.tags.some(t => Number(t) === dNum)).map(c => c.name);
+                            if (ex.cond && !ops.includes(ex.cond)) ops.push(ex.cond);
+                        } else if (t === 'ter') {
+                            ops = state.mapaCoherencia[ex.lug]?.ter || getRangoTerritorios();
+                        } else if (t === 'zon') {
+                            ops = state.mapaCoherencia[ex.lug]?.zon.filter(z => z.startsWith(ex.ter + '-')) || getRangoZonas();
+                        }
+
                         ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o)));
                         s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(s);
                     }
@@ -698,21 +767,43 @@
 
     function init() {
         loadFromStorage();
-        // --- TEMA ---
-        const handleTheme = () => {
-            const el = document.documentElement;
-            const applyTheme = (t) => { el.setAttribute('data-theme', t); localStorage.setItem(KEYS.THEME, t); };
-            document.getElementById('btnToggleTheme').onclick = () => applyTheme(el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-            const saved = localStorage.getItem(KEYS.THEME) || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            el.setAttribute('data-theme', saved);
-        };
-        handleTheme();
 
-        // --- CONFIGURACIÓN INICIAL ---
+        // --- TEMA (Agregado aquí) ---
+        const btnTheme = document.getElementById('btnToggleTheme');
+        const systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+
+        const setTheme = (isDark) => {
+            if (isDark) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem(KEYS.THEME, 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.setItem(KEYS.THEME, 'light');
+            }
+        };
+
+        const savedTheme = localStorage.getItem(KEYS.THEME);
+        if (savedTheme === 'dark' || (!savedTheme && systemThemeMedia.matches)) {
+            setTheme(true);
+        } else {
+            setTheme(false);
+        }
+
+        if (btnTheme) {
+            btnTheme.onclick = () => {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                setTheme(!isDark);
+            };
+        }
+
+        systemThemeMedia.addEventListener('change', (e) => {
+            setTheme(e.matches);
+        });
+        // ------------------------------
+
         if (!els.fInicio.value) els.fInicio.value = new Date().toISOString().split('T')[0];
         els.hManana.value = state.horario.m; els.hTarde.value = state.horario.t; els.hMananaFin.value = state.horario.mFin; els.hTardeFin.value = state.horario.tFin;
 
-        // --- EVENTOS ---
         els.diasContainer.onchange = (e) => { if (e.target.type === 'checkbox') { state.configDias[e.target.dataset.day][e.target.dataset.shift] = e.target.checked; actualizarTodo(); } };
         els.fInicio.onchange = () => ajustarFechas('combo'); els.fFinal.onchange = () => ajustarFechas('final'); els.cantFechas.onchange = () => ajustarFechas('combo');
 
@@ -722,7 +813,6 @@
         document.getElementById('btnLimpiarGrupos').onclick = () => modificarLista('grupo', 'borrarTodo');
         document.querySelectorAll('.btn-export').forEach(btn => btn.onclick = exportarPDF);
 
-        // --- EVENTOS DE IMPORTACIÓN ---
         const inputConductores = document.getElementById('fileConductores');
         if (inputConductores) inputConductores.addEventListener('change', (e) => importarDesdeArchivo(e, 'conductor'));
         const inputLugares = document.getElementById('fileLugares');
@@ -733,7 +823,6 @@
         document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
         els.btnBloquear.onclick = () => { const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]), all = ids.every(i => state.bloqueados[i]); ids.forEach(i => state.bloqueados[i] = !all); actualizarTodo(); };
 
-        // --- SIDEBAR ---
         const layout = document.querySelector('.main-layout'), sIcon = document.getElementById('sidebarIcon'), sText = document.getElementById('sidebarText');
         const updateUI = () => {
             const isH = layout.classList.contains('sidebar-hidden'), isM = window.innerWidth <= 850;
