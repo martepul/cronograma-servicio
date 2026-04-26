@@ -361,7 +361,7 @@ button:hover {
 }
 
 
-/* Responsividad */
+/* Responsividad Escritorio Menor */
 @media (max-width: 1024px) {
     .main-layout {
         flex-direction: column-reverse;
@@ -467,7 +467,6 @@ input[type="checkbox"] {
     width: 20px;
     height: 20px;
     appearance: none;
-    /* elimina estilo nativo */
     -webkit-appearance: none;
     -moz-appearance: none;
     border: 2px solid var(--border);
@@ -476,14 +475,11 @@ input[type="checkbox"] {
     margin-right: 5px;
 }
 
-/* color cuando está marcado */
 input[type="checkbox"]:checked {
     background-color: var(--accent);
-    /* verde */
     border: 2px solid var(--accent);
 }
 
-/* dibujar la palomita */
 input[type="checkbox"]:checked::after {
     content: "";
     position: absolute;
@@ -542,7 +538,6 @@ input[type="checkbox"]:checked::after {
 #cuerpoTabla td:last-child div {
     display: flex !important;
     flex-direction: row !important;
-    /* Alineación horizontal para mejor uso del espacio */
     flex-wrap: wrap;
     gap: 4px;
     justify-content: center;
@@ -566,31 +561,24 @@ input[type="checkbox"]:checked::after {
     border-radius: 4px;
     transition: all 0.2s ease;
     flex-shrink: 0;
-    /* Evita que se deformen */
 }
 
-/* 1. Contenedor de la celda de acciones: centrado total */
 #cuerpoTabla td:last-child {
     vertical-align: middle;
     text-align: center;
     padding: 0 5px !important;
-    /* Padding mínimo para no ensanchar la fila */
 }
 
-/* 2. Normalización de los contenedores internos del script */
 #cuerpoTabla td:last-child div {
     display: flex !important;
     flex-direction: row !important;
-    /* Alineación horizontal */
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
     gap: 4px !important;
-    /* Espaciado uniforme */
     margin: 0 !important;
 }
 
-/* 3. Botones: Tamaño fijo y compacto para no estirar la fila */
 .btn-lock,
 .btn-assign,
 .btn-add-m,
@@ -613,22 +601,17 @@ input[type="checkbox"]:checked::after {
     box-sizing: border-box;
 }
 
-/* 4. Centrado específico para el botón de borrar (X) en filas extras */
-/* Como no tiene un div contenedor, lo centramos mediante la celda */
 #cuerpoTabla tr td:last-child:not(:has(div)) {
     height: 100%;
     min-height: 40px;
-    /* Altura mínima similar a las filas de datos */
 }
 
-/* 5. Ajuste de ancho de columna para evitar saltos de línea innecesarios */
 .th-actions {
     width: 90px !important;
     min-width: 90px;
     text-align: center;
 }
 
-/* 6. Feedback visual suave */
 #cuerpoTabla td:last-child button:hover {
     border-color: var(--primary);
     background-color: var(--card-bg);
@@ -644,24 +627,21 @@ input[type="checkbox"]:checked::after {
     font-weight: bold;
     font-style: italic;
     background-color: #fff9c4 !important;
-    /* Amarillo nota */
     color: var(--primary) !important;
-    /* Azul del tema */
     border-bottom: 2px solid var(--primary) !important;
-    /* Línea gruesa separadora */
     padding: 10px !important;
     font-size: 0.85rem;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    position: relative;
+    padding-right: 40px !important;
 }
 
-/* Ajuste para que no se pierda en modo oscuro */
 [data-theme="dark"] .comment-cell {
     background-color: #4a4a2e !important;
     color: #ffffff !important;
 }
 
-/* Botón de nota en la columna de acciones */
 .btn-note {
     width: 28px !important;
     height: 28px !important;
@@ -685,27 +665,14 @@ input[type="checkbox"]:checked::after {
     border-color: var(--primary);
 }
 
-/* --- Actualización para notas con botón de eliminar --- */
-
-/* Aseguramos que la celda de comentario permita posicionar el botón */
-.comment-cell {
-    position: relative;
-    /* Necesario para ubicar el botón X */
-    padding-right: 40px !important;
-    /* Espacio para que el texto no tape el botón */
-}
-
-/* Estilo del botón de eliminar nota (X) */
 .btn-delete-note {
     position: absolute;
     right: 10px;
     top: 50%;
     transform: translateY(-50%);
-    /* Centrado vertical exacto */
     background: transparent !important;
     border: none !important;
     color: #d32f2f !important;
-    /* Rojo */
     font-weight: bold;
     font-size: 1.4rem;
     line-height: 1;
@@ -720,190 +687,8 @@ input[type="checkbox"]:checked::after {
 .btn-delete-note:hover {
     opacity: 1;
     transform: translateY(-50%) scale(1.2);
-    /* Efecto pop al pasar el mouse */
     background: transparent !important;
     border-color: transparent !important;
-}
-
-/* --- DISEÑO MÓVIL REFINADO --- */
-@media screen and (max-width: 850px) {
-    body {
-        padding: 10px;
-    }
-
-    /* 1. Aseguramos que el header esté SIEMPRE por encima de todo */
-    header {
-        position: relative;
-        z-index: 10001;
-        /* Mayor que el 9999 del sidebar */
-        background: var(--bg-card);
-        /* Fondo sólido para que no se transparente el menú */
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
-
-    .header-flex {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-
-    .main-layout {
-        display: block;
-        /* Evita que el sidebar empuje el contenido lateralmente */
-        position: relative;
-    }
-
-    .table-container {
-        background: none;
-        border: none;
-        border-radius: 4px;
-        overflow-x: auto;
-    }
-
-    /* 1. La capa oscura de fondo (Overlay) */
-    .sidebar-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.5);
-        /* Oscurece el fondo */
-        z-index: 9998;
-        /* Debajo del sidebar, encima del contenido */
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease;
-        /* Importante: permite hacer clic en él */
-        pointer-events: none;
-    }
-
-    /* Cuando el menú está ABIERTO (no tiene la clase sidebar-hidden) */
-    .main-layout:not(.sidebar-hidden) .sidebar-overlay {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        /* Activamos el clic */
-    }
-
-    /* 2. El Sidebar (Menú) */
-    .sidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        /* Ancho completo del móvil */
-
-        /* AQUÍ ESTÁ LA CLAVE: 50% de la altura de la pantalla */
-        height: 50vh !important;
-        max-height: 50vh;
-
-        background: var(--bg);
-        z-index: 9999;
-        /* Encima de todo */
-        border-bottom: 2px solid var(--primary);
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        margin: 0 !important;
-        overflow-y: auto;
-        /* Scroll interno si el contenido es largo */
-
-        /* Animación desde ARRIBA */
-        transform: translateY(0);
-        visibility: visible;
-        transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
-    }
-
-    /* Estado OCULTO: Se sube fuera de la pantalla */
-    .main-layout.sidebar-hidden .sidebar {
-        transform: translateY(-100%);
-        visibility: hidden;
-    }
-
-    .content-area {
-        width: 100% !important;
-        padding-top: 10px;
-    }
-
-    thead {
-        display: none;
-    }
-
-    tr {
-        display: block;
-        margin-bottom: 20px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: var(--card-bg);
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    }
-
-    td {
-        display: flex;
-        justify-content: space-between;
-        border-bottom: 1px solid var(--card-accent);
-        text-align: right;
-    }
-
-    td::before {
-        content: attr(data-label);
-        font-weight: bold;
-        color: var(--primary);
-        font-size: 0.75rem;
-        flex: 1;
-        text-align: left;
-    }
-
-    /* Añadimos etiquetas M y T mediante CSS para no tocar el HTML innecesariamente */
-    .turno-m-wrapper::before {
-        content: "M: ";
-        font-weight: bold;
-        font-size: 0.7rem;
-        margin-right: 5px;
-        color: var(--text-muted);
-    }
-
-    .turno-t-wrapper::before {
-        content: "T: ";
-        font-weight: bold;
-        font-size: 0.7rem;
-        margin-right: 5px;
-        color: var(--text-muted);
-    }
-
-    .turno-m-wrapper,
-    .turno-t-wrapper {
-        display: flex;
-        align-items: center;
-        width: 100%;
-    }
-
-    td select,
-    td input {
-        flex: 2;
-        max-width: 160px;
-        font-size: 16px !important;
-    }
-
-    /* Botonera de acciones */
-    td:last-child {
-        background: var(--card-accent);
-        justify-content: center;
-        padding: 15px !important;
-    }
-
-    .btn-lock,
-    .btn-assign,
-    .btn-note,
-    .btn-add-m,
-    .btn-add-t,
-    #cuerpoTabla td:last-child button {
-        width: 44px !important;
-        height: 44px !important;
-        display: flex !important;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem !important;
-    }
 }
 
 /* --- Estilos para Lugar + Grupo --- */
@@ -912,7 +697,6 @@ input[type="checkbox"]:checked::after {
     align-items: center;
     gap: 5px;
     flex-wrap: wrap;
-    /* Para que el selector de grupo se ponga debajo si no cabe */
 }
 
 .lug-gru-wrapper .btn-add-gru {
@@ -924,54 +708,41 @@ input[type="checkbox"]:checked::after {
     font-size: 1.1rem;
     line-height: 1;
     flex-shrink: 0;
-    /* Evita que se encoja */
 }
 
 .lug-gru-wrapper>select {
     flex: 1 1 auto;
-    /* Permite que el selector crezca */
     min-width: 120px;
-    /* Ancho mínimo para que no se vea mal */
 }
 
 .lug-gru-wrapper .gru-container {
     flex-basis: 100%;
-    /* Ocupa toda la línea cuando es visible */
     margin-top: 5px;
 }
 
-/* =========================================
-   OPTIMIZACIÓN DE ESPACIO EN LA TABLA
-   ========================================= */
-
-/* 1. Reducir relleno y ajustar fuente en celdas de la tabla */
+/* OPTIMIZACIÓN DE ESPACIO EN LA TABLA */
 th,
 td {
     padding: 4px 8px !important;
     font-size: 0.85rem;
 }
 
-/* 2. Reducir la separación vertical entre turnos (Mañana/Tarde) */
 .stacked-cell {
     gap: 2px !important;
 }
 
-/* 3. Comprimir selectores de Lugar, Grupo y sus botones */
 .lug-gru-wrapper {
     gap: 2px !important;
 }
 
-/* 4. Optimizar inputs y selects DENTRO de la tabla para que no hereden el padding global de 10px */
 #cuerpoTabla td select,
 #cuerpoTabla td input[type="text"] {
     padding: 1px 4px !important;
     margin-bottom: 0 !important;
     font-size: 0.8rem;
     height: 24px;
-    /* Obliga a mantener un perfil bajo */
 }
 
-/* 5. Reducir tamaño de los botones de acción en la última columna */
 .btn-lock,
 .btn-assign,
 .btn-add-m,
@@ -985,13 +756,11 @@ td {
     font-size: 0.85rem !important;
 }
 
-/* 6. Ajustar el ancho del contenedor de acciones ya que los botones son más pequeños */
 .th-actions {
     width: 75px !important;
     min-width: 75px !important;
 }
 
-/* 7. Comprimir la nota (banner amarillo) para que no ocupe tanto alto */
 .comment-cell {
     padding: 4px 40px 4px 10px !important;
     font-size: 0.75rem !important;
@@ -1043,37 +812,143 @@ td {
     margin-top: 10px;
     margin-bottom: 10px;
 }
+
+
 /* =========================================
-   OPTIMIZACIÓN DE ESPACIO EN MÓVIL
+   DISEÑO MÓVIL (SEGURO Y NATIVO)
    ========================================= */
 @media screen and (max-width: 850px) {
+    body {
+        padding: 10px;
+    }
 
-    /* Reducir separación entre las tarjetas (filas) */
+    header {
+        position: relative;
+        z-index: 10001;
+        background: var(--bg-card);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-flex {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .main-layout {
+        display: block;
+        position: relative;
+    }
+
+    /* 1. SCROLL HORIZONTAL (No deforma la tabla ni entra en conflicto con JS) */
+    .table-container {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        width: 100%;
+        overflow-x: auto;
+        /* Permite deslizar a los lados */
+        -webkit-overflow-scrolling: touch;
+        /* Scroll suave en móviles */
+        padding-bottom: 10px;
+    }
+
+    /* Forzamos a la tabla a mantener un ancho mínimo para que no se aplasten las columnas */
+    table {
+        min-width: 900px;
+    }
+
+    /* Restauramos las propiedades nativas por si estaban sobreescritas */
+    thead {
+        display: table-header-group !important;
+    }
+
     tr {
-        margin-bottom: 10px !important;
+        display: table-row !important;
+        margin-bottom: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
     }
 
-    /* Reducir padding interno de cada "celda" en la vista móvil */
-    td {
-        padding: 6px 10px !important;
+    td,
+    th {
+        display: table-cell !important;
+        white-space: nowrap;
     }
 
-    /* Achicar un poco los botones de acción para que quepan mejor en pantallas pequeñas */
+    td::before {
+        content: none !important;
+    }
+
+    /* 2. PANEL LATERAL SUPERPUESTO (Drawer) */
+    .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9998;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+    }
+
+    .main-layout:not(.sidebar-hidden) .sidebar-overlay {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 60vh !important;
+        max-height: 60vh;
+        background: var(--bg);
+        z-index: 9999;
+        border-bottom: 2px solid var(--primary);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        margin: 0 !important;
+        overflow-y: auto;
+        transform: translateY(0);
+        visibility: visible;
+        transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+
+    .main-layout.sidebar-hidden .sidebar {
+        transform: translateY(-100%);
+        visibility: hidden;
+    }
+
+    .content-area {
+        width: 100% !important;
+        padding-top: 10px;
+    }
+
+    /* 3. MEJORAS TÁCTILES (Botones y selects más grandes para los dedos) */
+    td select,
+    td input {
+        font-size: 16px !important;
+        /* El tamaño 16px evita que Safari (iOS) haga zoom forzado */
+        padding: 8px !important;
+        height: auto;
+        min-width: 120px;
+    }
+
     .btn-lock,
     .btn-assign,
     .btn-note,
     .btn-add-m,
     .btn-add-t,
+    .btn-add-gru,
     #cuerpoTabla td:last-child button {
-        width: 36px !important;
-        height: 36px !important;
-        font-size: 1rem !important;
-    }
-
-    td select,
-    td input {
-        font-size: 0.9rem !important;
-        padding: 4px !important;
-        height: auto;
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 1.1rem !important;
     }
 }
+
