@@ -1033,6 +1033,16 @@ td {
     color: #bbb;
 }
 
+[data-theme="dark"] .btn-tag.active {
+    background: #569CD6;
+    color: white;
+    border-color: #2d4561;
+}
+
+.btn-importar {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
 /* =========================================
    OPTIMIZACIÓN DE ESPACIO EN MÓVIL
    ========================================= */
