@@ -133,9 +133,10 @@
                     <input type="text" id="nuevoConductorNombre" placeholder="Nombre...">
                     <button id="btnAgregarConductor">+ Añadir</button>
 
-                    <div class="import-zone">
-                        <label>Importar lista:</label>
-                        <input type="file" id="fileConductores" accept=".txt">
+                    <div class="btn-importar">
+                        <input type="file" id="fileConductores" accept=".txt" style="display:none">
+                        <button onclick="document.getElementById('fileConductores').click()">📂 Importar
+                            Conductores</button>
                     </div>
 
                     <ul id="listaConductores" class="participant-list"></ul>
@@ -146,9 +147,9 @@
                 <input type="text" id="nuevoLugarNombre" placeholder="Lugar...">
                 <button id="btnAgregarLugar">+ Añadir</button>
 
-                <div class="import-zone">
-                    <label>Importar lista:</label>
-                    <input type="file" id="fileLugares" accept=".txt">
+                <div class="btn-importar">
+                    <input type="file" id="fileLugares" accept=".txt" style="display:none">
+                    <button onclick="document.getElementById('fileLugares').click()">📂 Importar Lugares</button>
                 </div>
 
                 <ul id="listaLugares" class="participant-list"></ul>
