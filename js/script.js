@@ -9,7 +9,7 @@
         BLOQUEADOS: 'bloqueados_v1',
         HORARIO: 'horario_v2',
         CONFIG_COLS: 'config_cols_v1',
-        CONFIG_ORDER: 'config_order_v2',
+        CONFIG_ORDER: 'config_order_v3',
         CONFIG_DIAS: 'config_dias_v1',
         EXTRAS: 'filas_extras_v2',
         COMENTARIOS: 'comentarios_v1',
@@ -20,7 +20,6 @@
     const COL_DEFS = {
         lug: "Lugar de salida",
         ter: "Territorio",
-        zon: "Zona",
         cond: "Conductor",
         cua: "Cuadra",
         gru: "Grupo"
@@ -32,11 +31,6 @@
     const getRangoTerritorios = () => {
         const todos = Object.values(state.mapaCoherencia).flatMap(m => m.ter || []);
         return [...new Set(todos)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    };
-
-    const getRangoZonas = () => {
-        const todas = Object.values(state.mapaCoherencia).flatMap(m => m.zon || []);
-        return [...new Set(todas)].sort();
     };
 
     // --- FORMATEO DE GRUPOS ---
@@ -66,7 +60,7 @@
         asignaciones: {},
         horario: { m: '', t: '', mFin: '', tFin: '' },
         filasExtras: {},
-        colOrder: ['lug', 'ter', 'zon', 'cond'],
+        colOrder: ['lug', 'ter', 'cond'],
         configDias: {},
         comentarios: {},
         startOfWeek: 1,
@@ -124,11 +118,16 @@
         return {
             lugM: man.lugM || asig.lugM, lugT: man.lugT || asig.lugT,
             terM: man.terM || asig.terM, terT: man.terT || asig.terT,
-            zonM: man.zonM || asig.zonM, zonT: man.zonT || asig.zonT,
             condM: man.condM || asig.condM, condT: man.condT || asig.condT,
             cuaM: man.cuaM || "", cuaT: man.cuaT || "",
             gruM: man.gruM || "", gruT: man.gruT || ""
         };
+    };
+
+    const createDefaultDisp = () => {
+        let d = {};
+        for (let i = 0; i < 7; i++) d[i] = { m: false, t: false, pM: false, pT: false };
+        return d;
     };
 
     // --- PERSISTENCIA ---
@@ -136,8 +135,18 @@
         try {
             const rawCond = JSON.parse(localStorage.getItem(KEYS.CONDUCTORES)) || [];
             state.conductores = rawCond.map(c => {
-                if (typeof c === 'string') return { name: c, tags: [] };
-                return { ...c, tags: Array.isArray(c.tags) ? c.tags.map(Number) : [] };
+                if (typeof c === 'string') return { name: c, disponibilidad: createDefaultDisp(), cartas: false };
+
+                let disp = c.disponibilidad;
+                if (!disp) {
+                    disp = createDefaultDisp();
+                    if (Array.isArray(c.tags)) {
+                        c.tags.forEach(t => {
+                            disp[Number(t)] = { m: true, t: true, pM: false, pT: false };
+                        });
+                    }
+                }
+                return { name: c.name || c, disponibilidad: disp, cartas: c.cartas || false };
             });
 
             state.lugares = JSON.parse(localStorage.getItem(KEYS.LUGARES)) || INITIAL_LUGARES;
@@ -150,7 +159,12 @@
             state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {};
 
             const storedOrder = JSON.parse(localStorage.getItem(KEYS.CONFIG_ORDER));
-            if (storedOrder) state.colOrder = storedOrder;
+            if (storedOrder) {
+                state.colOrder = storedOrder.filter(c => c !== 'zon');
+            } else {
+                state.colOrder = ['lug', 'ter', 'cond'];
+            }
+
             const storedDias = JSON.parse(localStorage.getItem(KEYS.CONFIG_DIAS));
             state.configDias = storedDias || {};
             if (!storedDias) { for (let i = 0; i < 7; i++) state.configDias[i] = { m: true, t: (i !== 0) }; }
@@ -191,19 +205,15 @@
                 if (tipo === 'conductor') {
                     const nombre = partes[0];
                     if (nombre && !state.conductores.some(c => c.name === nombre)) {
-                        state.conductores.push({ name: nombre, tags: [] });
+                        state.conductores.push({ name: nombre, disponibilidad: createDefaultDisp(), cartas: false });
                         agregados++;
                     }
                 } else if (tipo === 'lugar') {
                     const nombre = partes[0];
                     if (nombre) {
                         if (!state.lugares.includes(nombre)) { state.lugares.push(nombre); agregados++; }
-                        const territorios = [], zonas = [];
-                        partes.slice(1).forEach(item => {
-                            if (item.includes('-')) { if (!zonas.includes(item)) zonas.push(item); }
-                            else { if (!territorios.includes(item)) territorios.push(item); }
-                        });
-                        state.mapaCoherencia[nombre] = { ter: territorios, zon: zonas };
+                        const territorios = partes.slice(1);
+                        state.mapaCoherencia[nombre] = { ter: territorios };
                     }
                 }
             });
@@ -218,77 +228,180 @@
         lector.readAsText(archivo);
     }
 
-    // --- ASIGNACIÓN ---
+    // --- ASIGNACIÓN (LÓGICA ACTUALIZADA) ---
     function asignarGenerico(tipo, targetId = null) {
         if (tipo === 'conductor' && state.conductores.length === 0) return alert("Faltan conductores.");
         if (tipo === 'territorio' && state.lugares.length === 0) return alert("Faltan lugares.");
         const fechas = generarFechasDiarias();
-        const usaZona = state.colOrder.includes('zon');
-        const obtenerUsoEnUltimoMes = (fechaTargetStr) => {
-            const usoTer = {}, usoZon = {};
+
+        const obtenerHistorialTer = (fechaTargetStr) => {
+            const usoTer = {};
+            const ultimoUso = {};
             const targetDate = stringToDate(fechaTargetStr);
             const limiteDate = new Date(targetDate);
             limiteDate.setDate(limiteDate.getDate() - 30);
             const todasLasFechas = new Set([...Object.keys(state.asignaciones), ...Object.keys(state.manuales), ...Object.keys(state.filasExtras)]);
-            todasLasFechas.forEach(idDia => {
+
+            const fechasOrdenadas = Array.from(todasLasFechas)
+                .filter(d => {
+                    const dDate = stringToDate(d);
+                    return dDate >= limiteDate && dDate < targetDate;
+                })
+                .sort((a, b) => stringToDate(a) - stringToDate(b));
+
+            fechasOrdenadas.forEach(idDia => {
                 const dDate = stringToDate(idDia);
-                if (dDate >= limiteDate && dDate < targetDate) {
-                    const datos = obtenerDatosDia(idDia);
-                    ['M', 'T'].forEach(t => {
-                        if (datos[`ter${t}`]) usoTer[datos[`ter${t}`]] = (usoTer[datos[`ter${t}`]] || 0) + 1;
-                        if (datos[`zon${t}`]) usoZon[datos[`zon${t}`]] = (usoZon[datos[`zon${t}`]] || 0) + 1;
-                    });
-                    (state.filasExtras[idDia] || []).forEach(ex => {
-                        if (ex.ter) usoTer[ex.ter] = (usoTer[ex.ter] || 0) + 1;
-                        if (ex.zon) usoZon[ex.zon] = (usoZon[ex.zon] || 0) + 1;
-                    });
-                }
+                const diffDays = Math.floor((targetDate - dDate) / (1000 * 60 * 60 * 24));
+                const datos = obtenerDatosDia(idDia);
+
+                const registrarUso = (t) => {
+                    if (!t) return;
+                    usoTer[t] = (usoTer[t] || 0) + 1;
+                    ultimoUso[t] = diffDays;
+                };
+
+                ['M', 'T'].forEach(t => { registrarUso(datos[`ter${t}`]); });
+                (state.filasExtras[idDia] || []).forEach(ex => { registrarUso(ex.ter); });
             });
-            return { usoTer, usoZon };
+            return { usoTer, ultimoUso };
         };
+
+        const esGrupo1 = (ter) => ter && /^1[0-3]-?[AB]?$/i.test(ter.trim()); // 10, 11, 12, 13 (A/B)
+        const esGrupo2 = (ter) => ter && /^[24789]-?[AB]?$/i.test(ter.trim()); // 2,4,7,8,9 (A/B)
+
+        const obtenerGrupoSabado = (domingoId) => {
+            const d = stringToDate(domingoId);
+            d.setDate(d.getDate() - 1);
+            const sabId = d.toISOString().split('T')[0];
+            const datosSab = obtenerDatosDia(sabId);
+            const extrasSab = state.filasExtras[sabId] || [];
+            const todosSab = [datosSab.terM, datosSab.terT, ...extrasSab.map(e => e.ter)].filter(Boolean);
+
+            if (todosSab.some(esGrupo1)) return 1;
+            if (todosSab.some(esGrupo2)) return 2;
+            return 0;
+        };
+
         fechas.forEach(f => {
             const id = f.toISOString().split('T')[0];
             if ((targetId && id !== targetId) || state.bloqueados[id]) return;
             if (!state.asignaciones[id]) state.asignaciones[id] = {};
             const asig = state.asignaciones[id];
+
             if (tipo === 'conductor') { delete asig.condM; delete asig.condT; }
-            else { ['lug', 'ter', 'zon'].forEach(k => { delete asig[k + 'M']; delete asig[k + 'T']; }); }
+            else { ['lug', 'ter'].forEach(k => { delete asig[k + 'M']; delete asig[k + 'T']; }); }
+
             const diaNum = f.getDay(), configDia = state.configDias[diaNum];
             const esFinde = (diaNum === 0 || diaNum === 6), hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
-            const usarTarde = configDia.t && hT !== '', usadosHoy = [];
+            const usarTarde = configDia.t && hT !== '';
+
+            const usadosHoyLug = [];
+            const usadosHoyTer = []; // Previene que un territorio se repita el mismo dia en distinto turno
+            const historial = obtenerHistorialTer(id);
+
             ['M', 'T'].forEach(turno => {
                 if ((turno === 'M' && !configDia.m) || (turno === 'T' && !usarTarde)) return;
+
                 if (tipo === 'conductor') {
                     const manual = state.manuales[id]?.[`cond${turno}`];
-                    if (manual) usadosHoy.push(manual);
+                    if (manual) usadosHoyLug.push(manual);
                     else {
-                        const pool = state.conductores.filter(c => !usadosHoy.includes(c.name) && (c.tags.length === 0 || c.tags.some(t => Number(t) === diaNum)));
-                        const elegido = pool[Math.floor(Math.random() * pool.length)];
-                        if (elegido) { asig[`cond${turno}`] = elegido.name; usadosHoy.push(elegido.name); }
+                        const currentTer = asig[`ter${turno}`] || state.manuales[id]?.[`ter${turno}`];
+                        const esCartas = currentTer && currentTer.toLowerCase().includes('cartas');
+
+                        const pool = state.conductores.filter(c => {
+                            if (usadosHoyLug.includes(c.name)) return false;
+                            if (esCartas && c.cartas) return true;
+                            const hasAnyConfig = Object.values(c.disponibilidad).some(d => d.m || d.t);
+                            if (!hasAnyConfig) return true; // Si no tiene configuración asume disponible
+                            return turno === 'M' ? c.disponibilidad[diaNum].m : c.disponibilidad[diaNum].t;
+                        });
+
+                        const prioritarios = pool.filter(c => turno === 'M' ? c.disponibilidad[diaNum].pM : c.disponibilidad[diaNum].pT);
+                        const listaFinal = prioritarios.length > 0 ? prioritarios : pool;
+                        const elegido = listaFinal[Math.floor(Math.random() * listaFinal.length)];
+
+                        if (elegido) { asig[`cond${turno}`] = elegido.name; usadosHoyLug.push(elegido.name); }
                     }
                 } else {
-                    const historial = obtenerUsoEnUltimoMes(id), manualLug = state.manuales[id]?.[`lug${turno}`];
+                    const manualLug = state.manuales[id]?.[`lug${turno}`];
+                    const manualTer = state.manuales[id]?.[`ter${turno}`];
                     let lugAct = manualLug;
+
                     if (!lugAct) {
-                        const disponibles = state.lugares.filter(l => !usadosHoy.includes(l));
+                        const disponibles = state.lugares.filter(l => !usadosHoyLug.includes(l));
                         let combinaciones = [];
+
                         disponibles.forEach(l => {
                             const cfg = state.mapaCoherencia[l];
-                            if (!cfg || cfg.ter.length === 0) { combinaciones.push({ lug: l, ter: null, zon: null, score: 0 }); return; }
+                            if (!cfg || cfg.ter.length === 0) { combinaciones.push({ lug: l, ter: null, score: 0 }); return; }
+
                             cfg.ter.forEach(t => {
-                                if (usaZona && cfg.zon.length > 0) {
-                                    const zTer = cfg.zon.filter(z => z.startsWith(t + '-'));
-                                    (zTer.length > 0 ? zTer : [null]).forEach(z => combinaciones.push({ lug: l, ter: t, zon: z, score: (historial.usoTer[t] || 0) + (z ? historial.usoZon[z] || 0 : 0) }));
-                                } else combinaciones.push({ lug: l, ter: t, zon: null, score: historial.usoTer[t] || 0 });
+                                // 1. Evitar repetir el mismo territorio en el mismo día (mañana/tarde)
+                                if (usadosHoyTer.includes(t)) return;
+
+                                // 2. Separación de 5 días de descanso
+                                const diasDesde = historial.ultimoUso[t];
+                                if (diasDesde !== undefined && diasDesde < 5) return;
+
+                                // 3. Lógica de Grupos Fines de Semana
+                                const isG1 = esGrupo1(t);
+                                const isG2 = esGrupo2(t);
+
+                                if (isG1 && !esFinde) return; // Grupo 1 SOLAMENTE en fines de semana
+                                if (diaNum === 0) { // Reglas para el Domingo
+                                    const grupoSab = obtenerGrupoSabado(id);
+                                    if (grupoSab === 1 && !isG2) return; // Si Sábado fue G1, Domingo debe ser G2
+                                    if (grupoSab === 2 && !isG1) return; // Si Sábado fue G2, Domingo debe ser G1
+                                }
+
+                                combinaciones.push({ lug: l, ter: t, score: historial.usoTer[t] || 0, isG1, isG2 });
                             });
                         });
-                        if (combinaciones.length > 0) {
-                            const min = Math.min(...combinaciones.map(c => c.score)), mejores = combinaciones.filter(c => c.score === min);
-                            const el = mejores[Math.floor(Math.random() * mejores.length)];
-                            asig[`lug${turno}`] = el.lug; if (el.ter) asig[`ter${turno}`] = el.ter; if (usaZona && el.zon) asig[`zon${turno}`] = el.zon;
-                            lugAct = el.lug; usadosHoy.push(lugAct);
+
+                        // Fallback: Si todas las opciones perfectas se descartan por los "5 días", relajar esa regla para no dejar en blanco
+                        if (combinaciones.length === 0) {
+                            disponibles.forEach(l => {
+                                const cfg = state.mapaCoherencia[l];
+                                if (!cfg || cfg.ter.length === 0) return;
+                                cfg.ter.forEach(t => {
+                                    if (usadosHoyTer.includes(t)) return;
+                                    const isG1 = esGrupo1(t);
+                                    const isG2 = esGrupo2(t);
+                                    if (isG1 && !esFinde) return;
+                                    if (diaNum === 0) {
+                                        const grupoSab = obtenerGrupoSabado(id);
+                                        if (grupoSab === 1 && !isG2) return;
+                                        if (grupoSab === 2 && !isG1) return;
+                                    }
+                                    combinaciones.push({ lug: l, ter: t, score: historial.usoTer[t] || 0, isG1, isG2 });
+                                });
+                            });
                         }
-                    } else usadosHoy.push(lugAct);
+
+                        if (combinaciones.length > 0) {
+                            const minScore = Math.min(...combinaciones.map(c => c.score));
+                            let mejores = combinaciones.filter(c => c.score === minScore);
+
+                            // Forzar uso de Grupos G1/G2 los sábados si están entre los mejores puntuados
+                            if (diaNum === 6) {
+                                const finesDeSemana = mejores.filter(c => c.isG1 || c.isG2);
+                                if (finesDeSemana.length > 0) mejores = finesDeSemana;
+                            }
+
+                            const el = mejores[Math.floor(Math.random() * mejores.length)];
+                            asig[`lug${turno}`] = el.lug;
+                            if (el.ter) {
+                                asig[`ter${turno}`] = el.ter;
+                                usadosHoyTer.push(el.ter); // Lo añade para evitar que salga en la tarde
+                            }
+                            lugAct = el.lug;
+                            usadosHoyLug.push(lugAct);
+                        }
+                    } else {
+                        usadosHoyLug.push(lugAct);
+                        if (manualTer) usadosHoyTer.push(manualTer);
+                    }
                 }
             });
         });
@@ -316,15 +429,15 @@
         else if (tipo === 'grupo') { lista = state.grupos; input = els.nuevoGrupo; }
         if (accion === 'agregar') {
             const raw = input.value.trim(); if (!raw) return;
-            if (tipo === 'conductor') { if (!lista.some(c => c.name === raw)) { lista.push({ name: raw, tags: [] }); input.value = ''; actualizarTodo(); } return; }
+            if (tipo === 'conductor') { if (!lista.some(c => c.name === raw)) { lista.push({ name: raw, disponibilidad: createDefaultDisp(), cartas: false }); input.value = ''; actualizarTodo(); } return; }
             if (tipo === 'grupo') {
                 const range = raw.match(/^(\d+)-(\d+)$/);
                 if (range) { for (let i = parseInt(range[1]); i <= parseInt(range[2]); i++) { if (!lista.includes(`Grupo ${i}`)) lista.push(`Grupo ${i}`); } input.value = ''; actualizarTodo(); return; }
             }
             if (!lista.includes(raw)) {
                 if (tipo === 'lugar') {
-                    const t = prompt("Territorios:") || "", z = prompt("Zonas:") || "";
-                    state.mapaCoherencia[raw] = { ter: t.split(',').map(s => s.trim()).filter(s => s), zon: z.split(',').map(s => s.trim()).filter(s => s) };
+                    const t = prompt("Territorios (separados por coma):") || "";
+                    state.mapaCoherencia[raw] = { ter: t.split(',').map(s => s.trim()).filter(s => s) };
                 }
                 lista.push(raw); input.value = ''; actualizarTodo();
             }
@@ -344,7 +457,21 @@
                 const t = rol.slice(-1), cfg = state.mapaCoherencia[valor];
                 if (cfg && cfg.ter.length > 0) {
                     state.manuales[fechaId][`ter${t}`] = cfg.ter[0];
-                    if (cfg.zon.length > 0) state.manuales[fechaId][`zon${t}`] = cfg.zon.find(z => z.startsWith(cfg.ter[0] + '-')) || cfg.zon[0];
+                }
+            } else if (rol.startsWith('ter')) {
+                const t = rol.slice(-1);
+                const currentData = obtenerDatosDia(fechaId);
+                const currentLug = currentData[`lug${t}`];
+
+                const lugEsValido = currentLug && state.mapaCoherencia[currentLug] && state.mapaCoherencia[currentLug].ter.includes(valor);
+
+                if (!lugEsValido) {
+                    const linkedLug = Object.keys(state.mapaCoherencia).find(l => state.mapaCoherencia[l].ter.includes(valor));
+                    if (linkedLug) {
+                        state.manuales[fechaId][`lug${t}`] = linkedLug;
+                    }
+                } else {
+                    state.manuales[fechaId][`lug${t}`] = currentLug;
                 }
             }
         }
@@ -354,7 +481,7 @@
     function agregarFilaExtra(dateId, turno) {
         if (state.bloqueados[dateId]) return;
         if (!state.filasExtras[dateId]) state.filasExtras[dateId] = [];
-        state.filasExtras[dateId].push({ id: Date.now(), turno, lug: '', ter: '', zon: '', cond: '', cua: '', gru: '' });
+        state.filasExtras[dateId].push({ id: Date.now(), turno, lug: '', ter: '', cond: '', cua: '', gru: '' });
         actualizarTodo();
     }
 
@@ -373,7 +500,14 @@
                 const cfg = state.mapaCoherencia[valor];
                 if (cfg && cfg.ter.length > 0) {
                     row.ter = cfg.ter[0];
-                    if (cfg.zon.length > 0) row.zon = cfg.zon.find(z => z.startsWith(row.ter + '-')) || cfg.zon[0];
+                }
+            } else if (campo === 'ter') {
+                const lugEsValido = row.lug && state.mapaCoherencia[row.lug] && state.mapaCoherencia[row.lug].ter.includes(valor);
+                if (!lugEsValido) {
+                    const linkedLug = Object.keys(state.mapaCoherencia).find(l => state.mapaCoherencia[l].ter.includes(valor));
+                    if (linkedLug) {
+                        row.lug = linkedLug;
+                    }
                 }
             }
             actualizarTodo();
@@ -407,7 +541,7 @@
 
     function renderColumnSelector() {
         const grid = document.querySelector('.columns-grid'); if (!grid) return; grid.innerHTML = '';
-        const all = [{ id: 'lug', lbl: 'Lugar' }, { id: 'ter', lbl: 'Territorio' }, { id: 'zon', lbl: 'Zona' }, { id: 'cond', lbl: 'Conductor' }, { id: 'cua', lbl: 'Cuadra' }, { id: 'gru', lbl: 'Grupo' }];
+        const all = [{ id: 'lug', lbl: 'Lugar' }, { id: 'ter', lbl: 'Territorio' }, { id: 'cond', lbl: 'Conductor' }, { id: 'cua', lbl: 'Cuadra' }, { id: 'gru', lbl: 'Grupo' }];
         all.forEach(c => {
             const label = document.createElement('label'); label.className = 'lb-col';
             const input = document.createElement('input'); input.type = 'checkbox'; input.value = c.id; input.checked = state.colOrder.includes(c.id);
@@ -433,20 +567,155 @@
         const draw = (l, container, tipo) => {
             container.innerHTML = '';
             l.forEach((item, i) => {
-                const li = document.createElement('li'); if (tipo === 'conductor') li.className = 'participant-item-complex';
-                const spanName = document.createElement('span'); spanName.textContent = (tipo === 'conductor') ? item.name : item;
-                li.appendChild(spanName);
+                const li = document.createElement('li');
+
                 if (tipo === 'conductor') {
-                    const tagCont = document.createElement('div'); tagCont.className = 'tag-container';
+                    li.className = 'participant-item-complex';
+                    li.style.flexDirection = 'column';
+                    li.style.alignItems = 'stretch';
+
+                    const topRow = document.createElement('div');
+                    topRow.style.display = 'flex';
+                    topRow.style.alignItems = 'center';
+                    topRow.style.justifyContent = 'space-between';
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = item.name;
+                    nameSpan.style.flex = '1';
+
+                    const rightGroup = document.createElement('div');
+                    rightGroup.style.display = 'flex';
+                    rightGroup.style.alignItems = 'center';
+
+                    const tagCont = document.createElement('div');
+                    tagCont.className = 'tag-container';
+
                     ['D', 'L', 'M', 'Mi', 'J', 'V', 'S'].forEach((letra, idx) => {
-                        const btn = document.createElement('button'); btn.textContent = letra; btn.className = `btn-tag ${item.tags.some(t => Number(t) === idx) ? 'active' : ''}`;
-                        btn.onclick = () => { if (item.tags.some(t => Number(t) === idx)) item.tags = item.tags.filter(t => Number(t) !== idx); else item.tags.push(Number(idx)); actualizarTodo(); };
+                        const disp = item.disponibilidad[idx];
+                        const isActive = disp.m || disp.t;
+                        const btn = document.createElement('button');
+                        btn.textContent = letra;
+                        btn.className = `btn-tag ${isActive ? 'active' : ''}`;
+                        btn.onclick = () => {
+                            if (isActive) {
+                                item.disponibilidad[idx] = { m: false, t: false, pM: false, pT: false };
+                            } else {
+                                item.disponibilidad[idx] = { m: true, t: true, pM: false, pT: false };
+                            }
+                            actualizarTodo();
+                        };
                         tagCont.appendChild(btn);
                     });
-                    li.appendChild(tagCont);
+
+                    const uiKey = 'cond_cfg_' + item.name;
+                    const configBtn = document.createElement('button');
+                    configBtn.innerHTML = '⚙️';
+                    configBtn.style.background = 'transparent';
+                    configBtn.style.border = 'none';
+                    configBtn.style.cursor = 'pointer';
+                    configBtn.style.marginLeft = '5px';
+                    configBtn.onclick = () => {
+                        state.uiState[uiKey] = !state.uiState[uiKey];
+                        actualizarTodo();
+                    };
+
+                    const delBtn = document.createElement('button');
+                    delBtn.textContent = '×';
+                    delBtn.style.marginLeft = '5px';
+                    delBtn.style.background = 'transparent';
+                    delBtn.style.border = 'none';
+                    delBtn.style.cursor = 'pointer';
+                    delBtn.style.color = '#d32f2f';
+                    delBtn.onclick = () => modificarLista(tipo, 'eliminar', i);
+
+                    rightGroup.append(tagCont, configBtn, delBtn);
+                    topRow.append(nameSpan, rightGroup);
+                    li.appendChild(topRow);
+
+                    // Panel de detalles (Mañana/Tarde/Prioridad y Cartas)
+                    const detailsDiv = document.createElement('div');
+                    detailsDiv.style.display = state.uiState[uiKey] ? 'block' : 'none';
+                    detailsDiv.style.fontSize = '0.8em';
+                    detailsDiv.style.marginTop = '8px';
+                    detailsDiv.style.background = 'var(--card-bg)';
+                    detailsDiv.style.padding = '8px';
+                    detailsDiv.style.borderRadius = '4px';
+                    detailsDiv.style.border = '1px solid var(--border)';
+
+                    const header = document.createElement('div');
+                    header.style.display = 'grid';
+                    header.style.gridTemplateColumns = '30px 1fr 1fr 1fr 1fr';
+                    header.style.textAlign = 'center';
+                    header.style.fontWeight = 'bold';
+                    header.style.marginBottom = '5px';
+                    header.style.borderBottom = '1px solid var(--border)';
+                    header.style.paddingBottom = '3px';
+                    header.innerHTML = `<span>Día</span><span title="Mañana">☀️ M</span><span title="Tarde">🌤️ T</span><span title="Prioridad Mañana">⭐ M</span><span title="Prioridad Tarde">⭐ T</span>`;
+                    detailsDiv.appendChild(header);
+
+                    ['D', 'L', 'M', 'Mi', 'J', 'V', 'S'].forEach((letra, idx) => {
+                        const row = document.createElement('div');
+                        row.style.display = 'grid';
+                        row.style.gridTemplateColumns = '30px 1fr 1fr 1fr 1fr';
+                        row.style.textAlign = 'center';
+                        row.style.alignItems = 'center';
+                        row.style.marginBottom = '4px';
+
+                        const dSpan = document.createElement('span');
+                        dSpan.textContent = letra;
+                        dSpan.style.fontWeight = 'bold';
+
+                        const chkM = document.createElement('input'); chkM.type = 'checkbox'; chkM.checked = item.disponibilidad[idx].m;
+                        const chkT = document.createElement('input'); chkT.type = 'checkbox'; chkT.checked = item.disponibilidad[idx].t;
+                        const chkPM = document.createElement('input'); chkPM.type = 'checkbox'; chkPM.checked = item.disponibilidad[idx].pM;
+                        const chkPT = document.createElement('input'); chkPT.type = 'checkbox'; chkPT.checked = item.disponibilidad[idx].pT;
+
+                        const updateDisp = (e) => {
+                            if (e.target === chkPM && chkPM.checked) chkM.checked = true;
+                            if (e.target === chkPT && chkPT.checked) chkT.checked = true;
+                            if (e.target === chkM && !chkM.checked) chkPM.checked = false;
+                            if (e.target === chkT && !chkT.checked) chkPT.checked = false;
+
+                            item.disponibilidad[idx] = { m: chkM.checked, t: chkT.checked, pM: chkPM.checked, pT: chkPT.checked };
+
+                            const topBtn = tagCont.children[idx];
+                            if (chkM.checked || chkT.checked) topBtn.classList.add('active');
+                            else topBtn.classList.remove('active');
+
+                            saveToStorage();
+                        };
+
+                        chkM.onchange = updateDisp; chkT.onchange = updateDisp; chkPM.onchange = updateDisp; chkPT.onchange = updateDisp;
+                        row.append(dSpan, chkM, chkT, chkPM, chkPT);
+                        detailsDiv.appendChild(row);
+                    });
+
+                    // Fila de opciones generales (Cartas)
+                    const genOptions = document.createElement('div');
+                    genOptions.style.marginTop = '8px';
+                    genOptions.style.borderTop = '1px dashed var(--border)';
+                    genOptions.style.paddingTop = '8px';
+                    genOptions.innerHTML = `<label style="cursor:pointer; display:flex; align-items:center; gap:5px;"><input type="checkbox" ${item.cartas ? 'checked' : ''}> ✉️ Disponible siempre para territorio "Cartas"</label>`;
+
+                    const chkCartas = genOptions.querySelector('input');
+                    chkCartas.onchange = (e) => {
+                        item.cartas = e.target.checked;
+                        actualizarTodo();
+                    };
+                    detailsDiv.appendChild(genOptions);
+
+                    li.appendChild(detailsDiv);
+
+                } else {
+                    const spanName = document.createElement('span');
+                    spanName.textContent = item;
+                    li.appendChild(spanName);
+                    const btn = document.createElement('button');
+                    btn.textContent = '×';
+                    btn.onclick = () => modificarLista(tipo, 'eliminar', i);
+                    li.appendChild(btn);
                 }
-                const btn = document.createElement('button'); btn.textContent = '×'; btn.onclick = () => modificarLista(tipo, 'eliminar', i);
-                li.appendChild(btn); container.appendChild(li);
+                container.appendChild(li);
             });
         };
         draw(state.conductores, els.listaCond, 'conductor'); draw(state.lugares, els.listaLugares, 'lugar'); draw(state.grupos, els.listaGrupos, 'grupo');
@@ -489,7 +758,22 @@
                     else if (tipo === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: datos[`cua${turno}`] || "", disabled: locked }); i.onchange = (e) => guardarManual(id, e.target.value, `cua${turno}`); cont.appendChild(i); }
                     else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
-                        let ops = (tipo === 'cond') ? state.conductores.filter(c => c.tags.length === 0 || c.tags.some(t => Number(t) === dNum)).map(c => c.name) : (tipo === 'ter') ? state.mapaCoherencia[datos[`lug${turno}`]]?.ter || getRangoTerritorios() : state.mapaCoherencia[datos[`lug${turno}`]]?.zon.filter(z => z.startsWith(datos[`ter${turno}`] + '-')) || getRangoZonas();
+                        let ops = [];
+                        if (tipo === 'cond') {
+                            const currentTer = datos[`ter${turno}`];
+                            const esCartas = currentTer && currentTer.toLowerCase().includes('cartas');
+
+                            ops = state.conductores.filter(c => {
+                                if (esCartas && c.cartas) return true;
+
+                                const disp = c.disponibilidad;
+                                const hasAnyConfig = Object.values(disp).some(d => d.m || d.t);
+                                if (!hasAnyConfig) return true;
+                                return turno === 'M' ? disp[dNum].m : disp[dNum].t;
+                            }).map(c => c.name);
+                        } else if (tipo === 'ter') {
+                            ops = getRangoTerritorios();
+                        }
                         if (tipo === 'cond' && datos[`cond${turno}`] && !ops.includes(datos[`cond${turno}`])) ops.push(datos[`cond${turno}`]);
                         ops.forEach(o => s.add(new Option(o, o, false, datos[`${tipo}${turno}`] === o)));
                         s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`); cont.appendChild(s);
@@ -522,7 +806,22 @@
                     else if (t === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked }); i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(i); }
                     else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
-                        let ops = (t === 'cond') ? state.conductores.filter(c => c.tags.length === 0 || c.tags.some(tag => Number(tag) === dNum)).map(c => c.name) : (t === 'ter') ? state.mapaCoherencia[ex.lug]?.ter || getRangoTerritorios() : state.mapaCoherencia[ex.lug]?.zon.filter(z => z.startsWith(ex.ter + '-')) || getRangoZonas();
+                        let ops = [];
+                        if (t === 'cond') {
+                            const currentTer = ex['ter'];
+                            const esCartas = currentTer && currentTer.toLowerCase().includes('cartas');
+
+                            ops = state.conductores.filter(c => {
+                                if (esCartas && c.cartas) return true;
+
+                                const disp = c.disponibilidad;
+                                const hasAnyConfig = Object.values(disp).some(d => d.m || d.t);
+                                if (!hasAnyConfig) return true;
+                                return ex.turno === 'M' ? disp[dNum].m : disp[dNum].t;
+                            }).map(c => c.name);
+                        } else if (t === 'ter') {
+                            ops = getRangoTerritorios();
+                        }
                         ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o)));
                         s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(s);
                     }
@@ -542,12 +841,19 @@
         const { jsPDF } = window.jspdf; const doc = new jsPDF('p', 'mm', 'a4'); const fechas = generarFechasDiarias(); if (fechas.length === 0) return alert("Sin fechas.");
         const semanas = []; let sem = []; fechas.forEach((f, i) => { sem.push(f); const sig = fechas[i + 1]; if (!sig || sig.getDay() === state.startOfWeek) { semanas.push([...sem]); sem = []; } });
         const headers = ['DÍA', 'HORA', ...state.colOrder.map(k => COL_DEFS[k].toUpperCase())];
-        let currentY = 12; doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(`PROGRAMA DE SERVICIO - ${fechas[0].toLocaleString('es-ES', { month: 'long' }).toUpperCase()} ${fechas[0].getFullYear()}`, 105, currentY, { align: 'center' });
-        currentY += 4; const rows = [];
+
+        let currentY = 8;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(`PROGRAMA DE SERVICIO - ${fechas[0].toLocaleString('es-ES', { month: 'long' }).toUpperCase()} ${fechas[0].getFullYear()}`, 105, currentY, { align: 'center' });
+        currentY += 3;
+
+        const rows = [];
         semanas.forEach(s => {
-            rows.push([{ content: `SEMANA DEL ${s[0].getDate()} AL ${s[s.length - 1].getDate()} DE ${s[s.length - 1].toLocaleString('es-ES', { month: 'long' }).toUpperCase()}`, colSpan: headers.length, styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 7.5 } }]);
+            rows.push([{ content: `SEMANA DEL ${s[0].getDate()} AL ${s[s.length - 1].getDate()} DE ${s[s.length - 1].toLocaleString('es-ES', { month: 'long' }).toUpperCase()}`, colSpan: headers.length, styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 8.5, cellPadding: 0.6 } }]);
             s.forEach(f => {
-                const id = f.toISOString().split('T')[0]; if (state.comentarios[id]) rows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [255, 253, 208], fontStyle: 'bolditalic', fontSize: 7 } }]);
+                const id = f.toISOString().split('T')[0];
+                if (state.comentarios[id]) rows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [255, 253, 208], fontStyle: 'bolditalic', fontSize: 8.5, cellPadding: 0.6 } }]);
                 const d = obtenerDatosDia(id), dNum = f.getDay(), cfg = state.configDias[dNum], esF = (dNum === 0 || dNum === 6), hM = esF ? (state.horario.mFin || state.horario.m) : state.horario.m, hT = esF ? (state.horario.tFin || state.horario.t) : state.horario.t;
                 const ex = state.filasExtras[id] || [], sM = cfg.m, sT = cfg.t && hT !== '';
                 let first = true; const total = (sM ? 1 : 0) + (sT ? 1 : 0) + ex.length;
@@ -565,7 +871,17 @@
                 if (sT) addR(hT, d, 'T'); ex.filter(e => e.turno === 'T').forEach(x => addR(hT, x));
             });
         });
-        doc.autoTable({ head: [headers], body: rows, startY: currentY, theme: 'grid', styles: { fontSize: 8.5, fontStyle: 'bold', cellPadding: 0.8, halign: 'center' }, headStyles: { fillColor: [44, 62, 80], textColor: 255 }, margin: { left: 8, right: 8 }, rowPageBreak: 'avoid' });
+
+        doc.autoTable({
+            head: [headers],
+            body: rows,
+            startY: currentY,
+            theme: 'grid',
+            styles: { fontSize: 8.5, fontStyle: 'bold', cellPadding: 0.4, halign: 'center' },
+            headStyles: { fillColor: [44, 62, 80], textColor: 255, cellPadding: 0.6 },
+            margin: { left: 5, right: 5, top: 5, bottom: 5 },
+            rowPageBreak: 'avoid'
+        });
         doc.save(`Programa_Servicio.pdf`);
     }
 
@@ -592,7 +908,6 @@
         document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
         els.btnBloquear.onclick = () => { const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]), all = ids.every(i => state.bloqueados[i]); ids.forEach(i => state.bloqueados[i] = !all); actualizarTodo(); };
 
-        // --- LÓGICA DE SIDEBAR REFINADA ---
         const layout = document.querySelector('.main-layout');
         const sidebar = document.querySelector('.sidebar');
         const sIcon = document.getElementById('sidebarIcon');
@@ -604,7 +919,6 @@
             sText.textContent = isM ? (isH ? "Configuración" : "Cerrar") : (isH ? "Mostrar" : "Ocultar");
         };
 
-        // Botón principal (Abrir/Cerrar)
         document.getElementById('toggleSidebar').onclick = (e) => {
             e.stopPropagation();
             layout.classList.toggle('sidebar-hidden');
@@ -612,13 +926,10 @@
             setTimeout(actualizarTodo, 300);
         };
 
-        // Cerrar al tocar área vacía del panel (en móvil)
         if (sidebar) {
             sidebar.onclick = (e) => {
                 const isMobile = window.innerWidth <= 850;
-                // Si el clic NO fue en un botón, input, select o etiqueta de configuración
                 const clickedControl = e.target.closest('button, input, select, label, .tab-button, .btn-tag');
-
                 if (isMobile && !clickedControl) {
                     layout.classList.add('sidebar-hidden');
                     updateUI();
