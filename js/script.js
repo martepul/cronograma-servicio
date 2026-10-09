@@ -14,7 +14,10 @@
         EXTRAS: 'filas_extras_v2',
         COMENTARIOS: 'comentarios_v1',
         START_WEEK: 'start_week_v1',
-        THEME: 'theme_v1'
+        THEME: 'theme_v1',
+        CONFIG_TERRITORIOS: 'config_ter_v1',
+        SEMANAS_CUSTOM: 'semanas_custom_v1', // Nueva llave para semanas personalizadas
+        HORARIOS_CUSTOM: 'horarios_custom_v1' // Nueva llave para horarios personalizados por día
     };
 
     const COL_DEFS = {
@@ -64,6 +67,9 @@
         configDias: {},
         comentarios: {},
         startOfWeek: 1,
+        configTerritorios: {},
+        semanasCustom: {}, // Nuevo estado para semanas custom
+        horariosCustom: {}, // Nuevo estado para horarios custom por día
         uiState: { openGroups: {} }
     };
 
@@ -85,7 +91,14 @@
         hTarde: document.getElementById('hTardeInput'),
         hMananaFin: document.getElementById('hMananaFindeInput'),
         hTardeFin: document.getElementById('hTardeFindeInput'),
-        diasContainer: document.getElementById('selectorDiasContainer')
+        diasContainer: document.getElementById('selectorDiasContainer'),
+
+        // Elementos del Modal
+        btnConfigTer: document.getElementById('btnConfigTerritorios'),
+        modalTer: document.getElementById('modalTerritorios'),
+        btnCerrarModalTer: document.getElementById('btnCerrarModalTer'),
+        listaConfigTer: document.getElementById('listaConfigTerritorios'),
+        btnGenerarCronograma: document.getElementById('btnGenerarCronograma')
     };
 
     // --- UTILIDADES ---
@@ -130,6 +143,12 @@
         return d;
     };
 
+    const createDefaultTerDisp = () => {
+        let d = {};
+        for (let i = 0; i < 7; i++) d[i] = { m: true, t: true };
+        return d;
+    };
+
     // --- PERSISTENCIA ---
     function loadFromStorage() {
         try {
@@ -157,6 +176,9 @@
             state.horario = JSON.parse(localStorage.getItem(KEYS.HORARIO)) || { m: '', t: '', mFin: '', tFin: '' };
             state.filasExtras = JSON.parse(localStorage.getItem(KEYS.EXTRAS)) || {};
             state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {};
+            state.configTerritorios = JSON.parse(localStorage.getItem(KEYS.CONFIG_TERRITORIOS)) || {};
+            state.semanasCustom = JSON.parse(localStorage.getItem(KEYS.SEMANAS_CUSTOM)) || {};
+            state.horariosCustom = JSON.parse(localStorage.getItem(KEYS.HORARIOS_CUSTOM)) || {};
 
             const storedOrder = JSON.parse(localStorage.getItem(KEYS.CONFIG_ORDER));
             if (storedOrder) {
@@ -187,6 +209,9 @@
         localStorage.setItem(KEYS.EXTRAS, JSON.stringify(state.filasExtras));
         localStorage.setItem(KEYS.COMENTARIOS, JSON.stringify(state.comentarios));
         localStorage.setItem(KEYS.START_WEEK, state.startOfWeek);
+        localStorage.setItem(KEYS.CONFIG_TERRITORIOS, JSON.stringify(state.configTerritorios));
+        localStorage.setItem(KEYS.SEMANAS_CUSTOM, JSON.stringify(state.semanasCustom));
+        localStorage.setItem(KEYS.HORARIOS_CUSTOM, JSON.stringify(state.horariosCustom));
     }
 
     // --- IMPORTACIÓN ---
@@ -228,183 +253,146 @@
         lector.readAsText(archivo);
     }
 
-    // --- ASIGNACIÓN (LÓGICA ACTUALIZADA) ---
-    function asignarGenerico(tipo, targetId = null) {
-        if (tipo === 'conductor' && state.conductores.length === 0) return alert("Faltan conductores.");
-        if (tipo === 'territorio' && state.lugares.length === 0) return alert("Faltan lugares.");
+    function generarCronograma(targetId = null) {
+        if (state.conductores.length === 0) return alert("Faltan conductores configurados.");
+        if (state.lugares.length === 0) return alert("Faltan lugares configurados.");
+
         const fechas = generarFechasDiarias();
+        const conteoMensual = {};
+        const todosTer = getRangoTerritorios();
 
-        const obtenerHistorialTer = (fechaTargetStr) => {
-            const usoTer = {};
-            const ultimoUso = {};
-            const targetDate = stringToDate(fechaTargetStr);
-            const limiteDate = new Date(targetDate);
-            limiteDate.setDate(limiteDate.getDate() - 30);
-            const todasLasFechas = new Set([...Object.keys(state.asignaciones), ...Object.keys(state.manuales), ...Object.keys(state.filasExtras)]);
+        // Inicializar conteo
+        todosTer.forEach(t => conteoMensual[t] = 0);
 
-            const fechasOrdenadas = Array.from(todasLasFechas)
-                .filter(d => {
-                    const dDate = stringToDate(d);
-                    return dDate >= limiteDate && dDate < targetDate;
-                })
-                .sort((a, b) => stringToDate(a) - stringToDate(b));
+        // 1. Limpiar automáticos y contar usos manuales/fijos en el mes
+        fechas.forEach(f => {
+            const id = f.toISOString().split('T')[0];
 
-            fechasOrdenadas.forEach(idDia => {
-                const dDate = stringToDate(idDia);
-                const diffDays = Math.floor((targetDate - dDate) / (1000 * 60 * 60 * 24));
-                const datos = obtenerDatosDia(idDia);
+            if (!state.bloqueados[id] && (!targetId || targetId === id)) {
+                if (!state.asignaciones[id]) state.asignaciones[id] = {};
+                delete state.asignaciones[id].lugM;
+                delete state.asignaciones[id].terM;
+                delete state.asignaciones[id].condM;
+                delete state.asignaciones[id].lugT;
+                delete state.asignaciones[id].terT;
+                delete state.asignaciones[id].condT;
+            }
 
-                const registrarUso = (t) => {
-                    if (!t) return;
-                    usoTer[t] = (usoTer[t] || 0) + 1;
-                    ultimoUso[t] = diffDays;
-                };
-
-                ['M', 'T'].forEach(t => { registrarUso(datos[`ter${t}`]); });
-                (state.filasExtras[idDia] || []).forEach(ex => { registrarUso(ex.ter); });
+            ['M', 'T'].forEach(turno => {
+                const terManual = state.manuales[id]?.[`ter${turno}`];
+                const terAsig = (!targetId || targetId !== id || state.bloqueados[id]) ? state.asignaciones[id]?.[`ter${turno}`] : null;
+                const ter = terManual || terAsig;
+                if (ter && conteoMensual[ter] !== undefined) conteoMensual[ter]++;
             });
-            return { usoTer, ultimoUso };
-        };
 
-        const esGrupo1 = (ter) => ter && /^1[0-3]-?[AB]?$/i.test(ter.trim()); // 10, 11, 12, 13 (A/B)
-        const esGrupo2 = (ter) => ter && /^[24789]-?[AB]?$/i.test(ter.trim()); // 2,4,7,8,9 (A/B)
+            (state.filasExtras[id] || []).forEach(ex => {
+                if (ex.ter && conteoMensual[ex.ter] !== undefined) conteoMensual[ex.ter]++;
+            });
+        });
 
-        const obtenerGrupoSabado = (domingoId) => {
-            const d = stringToDate(domingoId);
-            d.setDate(d.getDate() - 1);
-            const sabId = d.toISOString().split('T')[0];
-            const datosSab = obtenerDatosDia(sabId);
-            const extrasSab = state.filasExtras[sabId] || [];
-            const todosSab = [datosSab.terM, datosSab.terT, ...extrasSab.map(e => e.ter)].filter(Boolean);
-
-            if (todosSab.some(esGrupo1)) return 1;
-            if (todosSab.some(esGrupo2)) return 2;
-            return 0;
-        };
-
+        // 2. Asignar dinámicamente según configuración
         fechas.forEach(f => {
             const id = f.toISOString().split('T')[0];
             if ((targetId && id !== targetId) || state.bloqueados[id]) return;
+
             if (!state.asignaciones[id]) state.asignaciones[id] = {};
             const asig = state.asignaciones[id];
-
-            if (tipo === 'conductor') { delete asig.condM; delete asig.condT; }
-            else { ['lug', 'ter'].forEach(k => { delete asig[k + 'M']; delete asig[k + 'T']; }); }
-
-            const diaNum = f.getDay(), configDia = state.configDias[diaNum];
-            const esFinde = (diaNum === 0 || diaNum === 6), hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
+            const diaNum = f.getDay();
+            const configDia = state.configDias[diaNum];
+            const esFinde = (diaNum === 0 || diaNum === 6);
+            const customH = state.horariosCustom[id] || {};
+            const hT = (customH.t !== undefined && customH.t !== '') ? customH.t : (esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t);
             const usarTarde = configDia.t && hT !== '';
 
+            // Evaluamos en qué mes cae el día actual (0 = Enero, 1 = Febrero, etc.)
+            const mesActual = f.getMonth();
+
             const usadosHoyLug = [];
-            const usadosHoyTer = []; // Previene que un territorio se repita el mismo dia en distinto turno
-            const historial = obtenerHistorialTer(id);
+            const usadosHoyTer = [];
 
             ['M', 'T'].forEach(turno => {
                 if ((turno === 'M' && !configDia.m) || (turno === 'T' && !usarTarde)) return;
 
-                if (tipo === 'conductor') {
-                    const manual = state.manuales[id]?.[`cond${turno}`];
-                    if (manual) usadosHoyLug.push(manual);
-                    else {
-                        const currentTer = asig[`ter${turno}`] || state.manuales[id]?.[`ter${turno}`];
-                        const esCartas = currentTer && currentTer.toLowerCase().includes('cartas');
+                const manualCond = state.manuales[id]?.[`cond${turno}`];
+                if (manualCond) usadosHoyLug.push(manualCond);
 
-                        const pool = state.conductores.filter(c => {
-                            if (usadosHoyLug.includes(c.name)) return false;
-                            if (esCartas && c.cartas) return true;
-                            const hasAnyConfig = Object.values(c.disponibilidad).some(d => d.m || d.t);
-                            if (!hasAnyConfig) return true; // Si no tiene configuración asume disponible
-                            return turno === 'M' ? c.disponibilidad[diaNum].m : c.disponibilidad[diaNum].t;
+                const manualLug = state.manuales[id]?.[`lug${turno}`];
+                const manualTer = state.manuales[id]?.[`ter${turno}`];
+                let lugAct = manualLug;
+                let terAct = manualTer;
+
+                if (!lugAct || !terAct) {
+                    const terDisponibles = todosTer.filter(t => {
+                        if (usadosHoyTer.includes(t)) return false;
+
+                        const cfg = state.configTerritorios[t] || { frecuencia: 4, disponibilidad: createDefaultTerDisp(), mesesActivos: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] };
+                        if (!cfg.mesesActivos) cfg.mesesActivos = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+                        // Validar si el territorio está activo para el mes de la fecha actual
+                        if (!cfg.mesesActivos.includes(mesActual)) return false;
+
+                        if (conteoMensual[t] >= cfg.frecuencia) return false;
+
+                        const dispDia = cfg.disponibilidad[diaNum];
+                        if (turno === 'M' && !dispDia.m) return false;
+                        if (turno === 'T' && !dispDia.t) return false;
+
+                        return true;
+                    });
+
+                    const disponiblesLug = state.lugares.filter(l => !usadosHoyLug.includes(l));
+                    let combinaciones = [];
+
+                    disponiblesLug.forEach(l => {
+                        const cfgLug = state.mapaCoherencia[l];
+                        if (!cfgLug || cfgLug.ter.length === 0) return;
+
+                        cfgLug.ter.forEach(t => {
+                            if (terDisponibles.includes(t)) {
+                                combinaciones.push({ lug: l, ter: t });
+                            }
                         });
+                    });
 
-                        const prioritarios = pool.filter(c => turno === 'M' ? c.disponibilidad[diaNum].pM : c.disponibilidad[diaNum].pT);
-                        const listaFinal = prioritarios.length > 0 ? prioritarios : pool;
-                        const elegido = listaFinal[Math.floor(Math.random() * listaFinal.length)];
-
-                        if (elegido) { asig[`cond${turno}`] = elegido.name; usadosHoyLug.push(elegido.name); }
+                    if (combinaciones.length > 0) {
+                        const el = combinaciones[Math.floor(Math.random() * combinaciones.length)];
+                        asig[`lug${turno}`] = el.lug;
+                        asig[`ter${turno}`] = el.ter;
+                        lugAct = el.lug;
+                        terAct = el.ter;
+                        usadosHoyLug.push(lugAct);
+                        usadosHoyTer.push(terAct);
+                        conteoMensual[terAct]++;
                     }
                 } else {
-                    const manualLug = state.manuales[id]?.[`lug${turno}`];
-                    const manualTer = state.manuales[id]?.[`ter${turno}`];
-                    let lugAct = manualLug;
+                    usadosHoyLug.push(lugAct);
+                    if (terAct) usadosHoyTer.push(terAct);
+                }
 
-                    if (!lugAct) {
-                        const disponibles = state.lugares.filter(l => !usadosHoyLug.includes(l));
-                        let combinaciones = [];
+                if (!manualCond) {
+                    const esCartas = terAct && terAct.toLowerCase().includes('cartas');
+                    const poolCond = state.conductores.filter(c => {
+                        if (usadosHoyLug.includes(c.name)) return false;
+                        if (esCartas && c.cartas) return true;
 
-                        disponibles.forEach(l => {
-                            const cfg = state.mapaCoherencia[l];
-                            if (!cfg || cfg.ter.length === 0) { combinaciones.push({ lug: l, ter: null, score: 0 }); return; }
+                        const hasAnyConfig = Object.values(c.disponibilidad).some(d => d.m || d.t);
+                        if (!hasAnyConfig) return true;
 
-                            cfg.ter.forEach(t => {
-                                // 1. Evitar repetir el mismo territorio en el mismo día (mañana/tarde)
-                                if (usadosHoyTer.includes(t)) return;
+                        return turno === 'M' ? c.disponibilidad[diaNum].m : c.disponibilidad[diaNum].t;
+                    });
 
-                                // 2. Separación de 5 días de descanso
-                                const diasDesde = historial.ultimoUso[t];
-                                if (diasDesde !== undefined && diasDesde < 5) return;
+                    const prioritarios = poolCond.filter(c => turno === 'M' ? c.disponibilidad[diaNum].pM : c.disponibilidad[diaNum].pT);
+                    const listaFinal = prioritarios.length > 0 ? prioritarios : poolCond;
+                    const elegido = listaFinal[Math.floor(Math.random() * listaFinal.length)];
 
-                                // 3. Lógica de Grupos Fines de Semana
-                                const isG1 = esGrupo1(t);
-                                const isG2 = esGrupo2(t);
-
-                                if (isG1 && !esFinde) return; // Grupo 1 SOLAMENTE en fines de semana
-                                if (diaNum === 0) { // Reglas para el Domingo
-                                    const grupoSab = obtenerGrupoSabado(id);
-                                    if (grupoSab === 1 && !isG2) return; // Si Sábado fue G1, Domingo debe ser G2
-                                    if (grupoSab === 2 && !isG1) return; // Si Sábado fue G2, Domingo debe ser G1
-                                }
-
-                                combinaciones.push({ lug: l, ter: t, score: historial.usoTer[t] || 0, isG1, isG2 });
-                            });
-                        });
-
-                        // Fallback: Si todas las opciones perfectas se descartan por los "5 días", relajar esa regla para no dejar en blanco
-                        if (combinaciones.length === 0) {
-                            disponibles.forEach(l => {
-                                const cfg = state.mapaCoherencia[l];
-                                if (!cfg || cfg.ter.length === 0) return;
-                                cfg.ter.forEach(t => {
-                                    if (usadosHoyTer.includes(t)) return;
-                                    const isG1 = esGrupo1(t);
-                                    const isG2 = esGrupo2(t);
-                                    if (isG1 && !esFinde) return;
-                                    if (diaNum === 0) {
-                                        const grupoSab = obtenerGrupoSabado(id);
-                                        if (grupoSab === 1 && !isG2) return;
-                                        if (grupoSab === 2 && !isG1) return;
-                                    }
-                                    combinaciones.push({ lug: l, ter: t, score: historial.usoTer[t] || 0, isG1, isG2 });
-                                });
-                            });
-                        }
-
-                        if (combinaciones.length > 0) {
-                            const minScore = Math.min(...combinaciones.map(c => c.score));
-                            let mejores = combinaciones.filter(c => c.score === minScore);
-
-                            // Forzar uso de Grupos G1/G2 los sábados si están entre los mejores puntuados
-                            if (diaNum === 6) {
-                                const finesDeSemana = mejores.filter(c => c.isG1 || c.isG2);
-                                if (finesDeSemana.length > 0) mejores = finesDeSemana;
-                            }
-
-                            const el = mejores[Math.floor(Math.random() * mejores.length)];
-                            asig[`lug${turno}`] = el.lug;
-                            if (el.ter) {
-                                asig[`ter${turno}`] = el.ter;
-                                usadosHoyTer.push(el.ter); // Lo añade para evitar que salga en la tarde
-                            }
-                            lugAct = el.lug;
-                            usadosHoyLug.push(lugAct);
-                        }
-                    } else {
-                        usadosHoyLug.push(lugAct);
-                        if (manualTer) usadosHoyTer.push(manualTer);
+                    if (elegido) {
+                        asig[`cond${turno}`] = elegido.name;
+                        usadosHoyLug.push(elegido.name);
                     }
                 }
             });
         });
+
         actualizarTodo();
     }
 
@@ -563,6 +551,170 @@
         });
     }
 
+    function renderConfigTerritorios() {
+        if (!els.listaConfigTer) return;
+        els.listaConfigTer.innerHTML = '';
+        const todosTer = getRangoTerritorios();
+
+        todosTer.forEach(t => {
+            if (!state.configTerritorios[t]) {
+                state.configTerritorios[t] = { frecuencia: 4, disponibilidad: createDefaultTerDisp(), mesesActivos: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] };
+            }
+            const cfg = state.configTerritorios[t];
+            if (!cfg.mesesActivos) cfg.mesesActivos = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+            const li = document.createElement('li');
+            li.className = 'ter-config-item';
+
+            const topDiv = document.createElement('div');
+            topDiv.className = 'ter-config-main';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = t;
+
+            const selFreq = document.createElement('select');
+            for (let i = 1; i <= 31; i++) {
+                selFreq.add(new Option(`${i} ${i === 1 ? 'vez' : 'veces'}/mes`, i, false, cfg.frecuencia == i));
+            }
+            selFreq.onchange = (e) => { cfg.frecuencia = parseInt(e.target.value); saveToStorage(); };
+
+            const centerGroup = document.createElement('div');
+            centerGroup.style.display = 'flex';
+            centerGroup.style.alignItems = 'center';
+            centerGroup.style.justifyContent = 'space-between';
+
+            const tagCont = document.createElement('div');
+            tagCont.className = 'tag-container';
+
+            ['D', 'L', 'M', 'Mi', 'J', 'V', 'S'].forEach((letra, idx) => {
+                const disp = cfg.disponibilidad[idx];
+                const isActive = disp.m || disp.t;
+                const btn = document.createElement('button');
+                btn.textContent = letra;
+                btn.className = `btn-tag ${isActive ? 'active' : ''}`;
+                btn.onclick = () => {
+                    if (isActive) {
+                        cfg.disponibilidad[idx] = { m: false, t: false };
+                    } else {
+                        cfg.disponibilidad[idx] = { m: true, t: true };
+                    }
+                    saveToStorage();
+                    renderConfigTerritorios();
+                };
+                tagCont.appendChild(btn);
+            });
+
+            const uiKey = 'ter_cfg_' + t;
+            const configBtn = document.createElement('button');
+            configBtn.innerHTML = '⚙️';
+            configBtn.style.background = 'transparent';
+            configBtn.style.border = 'none';
+            configBtn.style.cursor = 'pointer';
+            configBtn.style.marginLeft = '5px';
+            configBtn.onclick = () => {
+                state.uiState[uiKey] = !state.uiState[uiKey];
+                renderConfigTerritorios();
+            };
+
+            centerGroup.append(tagCont, configBtn);
+            topDiv.append(nameSpan, selFreq, centerGroup);
+            li.appendChild(topDiv);
+
+            const detailsDiv = document.createElement('div');
+            detailsDiv.style.display = state.uiState[uiKey] ? 'block' : 'none';
+            detailsDiv.style.fontSize = '0.8em';
+            detailsDiv.style.marginTop = '8px';
+            detailsDiv.style.background = 'var(--bg)';
+            detailsDiv.style.padding = '8px';
+            detailsDiv.style.borderRadius = '2px';
+            detailsDiv.style.border = '1px solid var(--border)';
+
+            const header = document.createElement('div');
+            header.style.display = 'grid';
+            header.style.gridTemplateColumns = '50px 1fr 1fr';
+            header.style.textAlign = 'center';
+            header.style.fontWeight = 'bold';
+            header.style.marginBottom = '5px';
+            header.style.borderBottom = '1px solid var(--border)';
+            header.style.paddingBottom = '3px';
+            header.innerHTML = `<span>Día</span><span>☀️ Mañana</span><span>🌤️ Tarde</span>`;
+            detailsDiv.appendChild(header);
+
+            ['D', 'L', 'M', 'Mi', 'J', 'V', 'S'].forEach((letra, idx) => {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '50px 1fr 1fr';
+                row.style.textAlign = 'center';
+                row.style.alignItems = 'center';
+                row.style.marginBottom = '4px';
+
+                const dSpan = document.createElement('span');
+                dSpan.textContent = letra;
+                dSpan.style.fontWeight = 'bold';
+
+                const chkM = document.createElement('input'); chkM.type = 'checkbox'; chkM.checked = cfg.disponibilidad[idx].m;
+                const chkT = document.createElement('input'); chkT.type = 'checkbox'; chkT.checked = cfg.disponibilidad[idx].t;
+
+                const updateDisp = () => {
+                    cfg.disponibilidad[idx] = { m: chkM.checked, t: chkT.checked };
+                    saveToStorage();
+                    const topBtn = tagCont.children[idx];
+                    if (chkM.checked || chkT.checked) topBtn.classList.add('active');
+                    else topBtn.classList.remove('active');
+                };
+
+                chkM.onchange = updateDisp; chkT.onchange = updateDisp;
+                row.append(dSpan, chkM, chkT);
+                detailsDiv.appendChild(row);
+            });
+
+            const mesesCont = document.createElement('div');
+            mesesCont.style.marginTop = '8px';
+            mesesCont.style.borderTop = '1px dashed var(--border)';
+            mesesCont.style.paddingTop = '8px';
+
+            const mesesHeader = document.createElement('div');
+            mesesHeader.style.textAlign = 'center';
+            mesesHeader.style.fontWeight = 'bold';
+            mesesHeader.style.marginBottom = '5px';
+            mesesHeader.textContent = 'Meses Activos';
+            mesesCont.appendChild(mesesHeader);
+
+            const gridMeses = document.createElement('div');
+            gridMeses.style.display = 'grid';
+            gridMeses.style.gridTemplateColumns = 'repeat(6, 1fr)';
+            gridMeses.style.gap = '4px';
+
+            const nombresMeses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+            nombresMeses.forEach((nombre, mesIdx) => {
+                const btnMes = document.createElement('button');
+                btnMes.textContent = nombre;
+                const isActive = cfg.mesesActivos.includes(mesIdx);
+                btnMes.className = `btn-tag ${isActive ? 'active' : ''}`;
+                btnMes.style.width = '100%';
+                btnMes.style.padding = '2px 0';
+                btnMes.onclick = () => {
+                    if (cfg.mesesActivos.includes(mesIdx)) {
+                        cfg.mesesActivos = cfg.mesesActivos.filter(m => m !== mesIdx);
+                        btnMes.classList.remove('active');
+                    } else {
+                        cfg.mesesActivos.push(mesIdx);
+                        btnMes.classList.add('active');
+                    }
+                    saveToStorage();
+                };
+                gridMeses.appendChild(btnMes);
+            });
+
+            mesesCont.appendChild(gridMeses);
+            detailsDiv.appendChild(mesesCont);
+
+            li.appendChild(detailsDiv);
+            els.listaConfigTer.appendChild(li);
+        });
+    }
+
     function renderListas() {
         const draw = (l, container, tipo) => {
             container.innerHTML = '';
@@ -632,7 +784,6 @@
                     topRow.append(nameSpan, rightGroup);
                     li.appendChild(topRow);
 
-                    // Panel de detalles (Mañana/Tarde/Prioridad y Cartas)
                     const detailsDiv = document.createElement('div');
                     detailsDiv.style.display = state.uiState[uiKey] ? 'block' : 'none';
                     detailsDiv.style.fontSize = '0.8em';
@@ -690,7 +841,6 @@
                         detailsDiv.appendChild(row);
                     });
 
-                    // Fila de opciones generales (Cartas)
                     const genOptions = document.createElement('div');
                     genOptions.style.marginTop = '8px';
                     genOptions.style.borderTop = '1px dashed var(--border)';
@@ -728,8 +878,39 @@
         els.tablaBody.innerHTML = '';
         generarFechasDiarias().forEach(f => {
             const id = f.toISOString().split('T')[0], locked = state.bloqueados[id], dNum = f.getDay(), cfg = state.configDias[dNum];
-            const esFinde = (dNum === 0 || dNum === 6), hM = esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m, hT = esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t;
+            const esFinde = (dNum === 0 || dNum === 6);
+            const customH = state.horariosCustom[id] || {};
+            const hM = (customH.m !== undefined && customH.m !== '') ? customH.m : (esFinde ? (state.horario.mFin || state.horario.m) : state.horario.m);
+            const hT = (customH.t !== undefined && customH.t !== '') ? customH.t : (esFinde ? (state.horario.tFin || state.horario.t) : state.horario.t);
             const showM = cfg.m, showT = cfg.t && hT !== '', extras = state.filasExtras[id] || [], datos = obtenerDatosDia(id);
+
+            // Render marcador de semana custom si existe
+            if (state.semanasCustom[id]) {
+                const trW = document.createElement('tr');
+                trW.className = 'week-row';
+                const tdW = document.createElement('td');
+                tdW.colSpan = 2 + state.colOrder.length + 1;
+                tdW.style.backgroundColor = 'rgba(33, 150, 243, 0.1)';
+                tdW.style.textAlign = 'center';
+                tdW.style.fontWeight = 'bold';
+                tdW.style.padding = '5px';
+                tdW.innerHTML = `<span>🏷️ BARRA DE SEMANA: ${state.semanasCustom[id].toUpperCase()}</span>`;
+                if (!locked) {
+                    const b = document.createElement('button');
+                    b.innerHTML = '&times;';
+                    b.style.marginLeft = '10px';
+                    b.style.cursor = 'pointer';
+                    b.style.border = 'none';
+                    b.style.background = 'transparent';
+                    b.style.color = 'red';
+                    b.style.fontWeight = 'bold';
+                    b.onclick = () => { delete state.semanasCustom[id]; actualizarTodo(); };
+                    tdW.appendChild(b);
+                }
+                trW.appendChild(tdW);
+                els.tablaBody.appendChild(trW);
+            }
+
             if (state.comentarios[id]) {
                 const trCom = document.createElement('tr'); trCom.className = 'comment-row';
                 const tdCom = document.createElement('td'); tdCom.colSpan = 2 + state.colOrder.length + 1; tdCom.className = 'comment-cell';
@@ -745,6 +926,11 @@
                 const td = tr.insertCell(); const cont = document.createElement('div'); cont.className = 'stacked-cell';
                 ['M', 'T'].forEach(turno => {
                     if ((turno === 'M' && !showM) || (turno === 'T' && !showT)) return;
+
+                    const wrap = document.createElement('div');
+                    wrap.className = `cell-item turno-${turno.toLowerCase()}`;
+                    wrap.setAttribute('data-label', tipo.charAt(0).toUpperCase());
+
                     if (tipo === 'lug') {
                         const w = document.createElement('div'); w.className = 'lug-gru-wrapper'; const key = `${id}-${turno}`;
                         const b = document.createElement('button'); b.className = 'btn-add-gru'; const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
@@ -753,19 +939,22 @@
                         const gc = document.createElement('div'); gc.className = 'gru-container'; const open = !!state.uiState.openGroups[key]; gc.style.display = open ? 'block' : 'none'; b.textContent = open ? '-' : '+';
                         gc.appendChild(crearSelectorGrupos(datos[`gru${turno}`], locked, (v) => guardarManual(id, v, `gru${turno}`)));
                         b.onclick = () => { state.uiState.openGroups[key] = !state.uiState.openGroups[key]; actualizarTodo(); };
-                        w.append(b, s, gc); cont.appendChild(w);
-                    } else if (tipo === 'gru') cont.appendChild(crearSelectorGrupos(datos[`gru${turno}`], locked, (v) => guardarManual(id, v, `gru${turno}`)));
-                    else if (tipo === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: datos[`cua${turno}`] || "", disabled: locked }); i.onchange = (e) => guardarManual(id, e.target.value, `cua${turno}`); cont.appendChild(i); }
-                    else {
+                        w.append(b, s, gc);
+                        wrap.appendChild(w);
+                    } else if (tipo === 'gru') {
+                        wrap.appendChild(crearSelectorGrupos(datos[`gru${turno}`], locked, (v) => guardarManual(id, v, `gru${turno}`)));
+                    } else if (tipo === 'cua') {
+                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: datos[`cua${turno}`] || "", disabled: locked });
+                        i.onchange = (e) => guardarManual(id, e.target.value, `cua${turno}`);
+                        wrap.appendChild(i);
+                    } else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
                         let ops = [];
                         if (tipo === 'cond') {
                             const currentTer = datos[`ter${turno}`];
                             const esCartas = currentTer && currentTer.toLowerCase().includes('cartas');
-
                             ops = state.conductores.filter(c => {
                                 if (esCartas && c.cartas) return true;
-
                                 const disp = c.disponibilidad;
                                 const hasAnyConfig = Object.values(disp).some(d => d.m || d.t);
                                 if (!hasAnyConfig) return true;
@@ -776,44 +965,100 @@
                         }
                         if (tipo === 'cond' && datos[`cond${turno}`] && !ops.includes(datos[`cond${turno}`])) ops.push(datos[`cond${turno}`]);
                         ops.forEach(o => s.add(new Option(o, o, false, datos[`${tipo}${turno}`] === o)));
-                        s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`); cont.appendChild(s);
+                        s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`);
+                        wrap.appendChild(s);
                     }
+                    cont.appendChild(wrap);
                 });
                 td.appendChild(cont);
             });
-            const tdA = tr.insertCell(); tdA.innerHTML = `<div class="actions-wrapper"><div class="main-actions"><button class="btn-lock">${locked ? '🔒' : '🔓'}</button><button class="btn-assign" ${locked ? 'disabled' : ''}>↻</button><button class="btn-note">📝</button></div><div class="extra-actions">${showM ? '<button class="btn-add-m">+M</button>' : ''}${showT ? '<button class="btn-add-t">+T</button>' : ''}</div></div>`;
+            const tdA = tr.insertCell(); tdA.innerHTML = `<div class="actions-wrapper"><div class="main-actions"><button class="btn-lock">${locked ? '🔒' : '🔓'}</button><button class="btn-assign" ${locked ? 'disabled' : ''} title="Generar para este día">↻</button><button class="btn-note" title="Añadir nota">📝</button><button class="btn-time" title="Editar horario de este día">⏰</button><button class="btn-week" title="Fijar inicio de semana y título de barra">🏷️</button></div><div class="extra-actions">${showM ? '<button class="btn-add-m">+M</button>' : ''}${showT ? '<button class="btn-add-t">+T</button>' : ''}</div></div>`;
             tdA.querySelector('.btn-lock').onclick = () => { state.bloqueados[id] = !state.bloqueados[id]; actualizarTodo(); };
-            tdA.querySelector('.btn-assign').onclick = () => { asignarGenerico('conductor', id); asignarGenerico('territorio', id); };
+            tdA.querySelector('.btn-assign').onclick = () => { generarCronograma(id); };
             tdA.querySelector('.btn-note').onclick = () => { const n = prompt("Nota:", state.comentarios[id] || ""); if (n !== null) { if (n.trim() === "") delete state.comentarios[id]; else state.comentarios[id] = n; actualizarTodo(); } };
+
+            // Evento para editar horario específico del día
+            tdA.querySelector('.btn-time').onclick = () => {
+                const curM = hM || '';
+                const curT = hT || '';
+                const newM = prompt("Horario de Mañana para este día (ej. 08:30, o deja en blanco para usar por defecto):", curM);
+                if (newM === null) return;
+                const newT = prompt("Horario de Tarde para este día (ej. 16:00, o deja en blanco para usar por defecto):", curT);
+                if (newT === null) return;
+
+                if (newM.trim() === '' && newT.trim() === '') {
+                    delete state.horariosCustom[id];
+                } else {
+                    state.horariosCustom[id] = {
+                        m: newM.trim(),
+                        t: newT.trim()
+                    };
+                }
+                actualizarTodo();
+            };
+
+            // Evento para el botón de semana custom
+            tdA.querySelector('.btn-week').onclick = () => {
+                const current = state.semanasCustom[id] !== undefined ? state.semanasCustom[id] : `SEMANA DEL ${f.getDate()} AL ...`;
+                const t = prompt("Título para la barra de semana que empieza este día (deja en blanco para cancelar/quitar):", current);
+                if (t !== null) {
+                    if (t.trim() === "") delete state.semanasCustom[id];
+                    else state.semanasCustom[id] = t;
+                    actualizarTodo();
+                }
+            };
+
             if (showM) tdA.querySelector('.btn-add-m').onclick = () => agregarFilaExtra(id, 'M');
             if (showT) tdA.querySelector('.btn-add-t').onclick = () => agregarFilaExtra(id, 'T');
             els.tablaBody.appendChild(tr);
             extras.forEach(ex => {
-                const trx = document.createElement('tr'); if (locked) trx.style.opacity = "0.7";
-                const tdExH = trx.insertCell(); tdExH.innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? '#2196F3' : '#FF9800'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
+                const trx = document.createElement('tr');
+                trx.className = 'fila-extra';
+                if (locked) trx.style.opacity = "0.7";
+
+                const tdExH = trx.insertCell();
+                tdExH.innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? '#2196F3' : '#FF9800'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
+
                 state.colOrder.forEach(t => {
                     const tdEx = trx.insertCell();
+                    const wrap = document.createElement('div');
+                    wrap.className = `cell-item turno-${ex.turno.toLowerCase()} is-extra`;
+                    wrap.setAttribute('data-label', t.charAt(0).toUpperCase());
+
                     if (t === 'lug') {
-                        const w = document.createElement('div'); w.className = 'lug-gru-wrapper'; const b = document.createElement('button'); b.className = 'btn-add-gru'; b.textContent = !!state.uiState.openGroups[ex.id] ? '-' : '+';
-                        const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
+                        const w = document.createElement('div');
+                        w.className = 'lug-gru-wrapper';
+                        const b = document.createElement('button');
+                        b.className = 'btn-add-gru';
+                        b.textContent = !!state.uiState.openGroups[ex.id] ? '-' : '+';
+                        const s = document.createElement('select');
+                        s.disabled = locked;
+                        s.add(new Option("-", ""));
                         state.lugares.forEach(o => s.add(new Option(o, o, false, ex.lug === o)));
                         s.onchange = (e) => guardarExtra(id, ex.id, 'lug', e.target.value);
-                        const gc = document.createElement('div'); gc.className = 'gru-container'; gc.style.display = !!state.uiState.openGroups[ex.id] ? 'block' : 'none';
+                        const gc = document.createElement('div');
+                        gc.className = 'gru-container';
+                        gc.style.display = !!state.uiState.openGroups[ex.id] ? 'block' : 'none';
                         gc.appendChild(crearSelectorGrupos(ex.gru, locked, (v) => guardarExtra(id, ex.id, 'gru', v)));
                         b.onclick = () => { state.uiState.openGroups[ex.id] = !state.uiState.openGroups[ex.id]; actualizarTodo(); };
-                        w.append(b, s, gc); tdEx.appendChild(w);
-                    } else if (t === 'gru') tdEx.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v)));
-                    else if (t === 'cua') { const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked }); i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(i); }
-                    else {
-                        const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
+                        w.append(b, s, gc);
+                        wrap.appendChild(w);
+                    } else if (t === 'gru') {
+                        wrap.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v)));
+                    } else if (t === 'cua') {
+                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked });
+                        i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
+                        wrap.appendChild(i);
+                    } else {
+                        const s = document.createElement('select');
+                        s.disabled = locked;
+                        s.add(new Option("-", ""));
                         let ops = [];
                         if (t === 'cond') {
                             const currentTer = ex['ter'];
                             const esCartas = currentTer && currentTer.toLowerCase().includes('cartas');
-
                             ops = state.conductores.filter(c => {
                                 if (esCartas && c.cartas) return true;
-
                                 const disp = c.disponibilidad;
                                 const hasAnyConfig = Object.values(disp).some(d => d.m || d.t);
                                 if (!hasAnyConfig) return true;
@@ -823,23 +1068,71 @@
                             ops = getRangoTerritorios();
                         }
                         ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o)));
-                        s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value); tdEx.appendChild(s);
+                        s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
+                        wrap.appendChild(s);
                     }
+                    tdEx.appendChild(wrap);
                 });
-                const tdAx = trx.insertCell(); const bDel = document.createElement('button'); bDel.innerHTML = 'Eliminar &times;'; bDel.style.color = 'red'; bDel.disabled = locked; bDel.onclick = () => eliminarFilaExtra(id, ex.id);
-                tdAx.appendChild(bDel); els.tablaBody.appendChild(trx);
+
+                const tdAx = trx.insertCell();
+                const bDel = document.createElement('button');
+                bDel.innerHTML = 'Eliminar &times;';
+                bDel.style.color = 'red';
+                bDel.disabled = locked;
+                bDel.onclick = () => eliminarFilaExtra(id, ex.id);
+
+                const wrapAction = document.createElement('div');
+                wrapAction.className = 'extra-delete-wrap';
+                wrapAction.appendChild(bDel);
+                tdAx.appendChild(wrapAction);
+
+                els.tablaBody.appendChild(trx);
             });
         });
         const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]);
         els.btnBloquear.innerHTML = (ids.length > 0 && ids.every(i => state.bloqueados[i])) ? ' Desbloquear Todo' : ' Bloquear Todo';
     }
 
-    function actualizarTodo() { renderListas(); renderColumnSelector(); renderSelectorDias(); renderTabla(); saveToStorage(); }
+    function actualizarTodo() { renderListas(); renderColumnSelector(); renderSelectorDias(); renderConfigTerritorios(); renderTabla(); saveToStorage(); }
 
     function exportarPDF() {
         const formatTime = (t) => { if (!t || !t.includes(':')) return '--:--'; let [h, m] = t.split(':').map(Number); const ampm = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12; return `${h}:${m < 10 ? '0' + m : m} ${ampm}`; };
         const { jsPDF } = window.jspdf; const doc = new jsPDF('p', 'mm', 'a4'); const fechas = generarFechasDiarias(); if (fechas.length === 0) return alert("Sin fechas.");
-        const semanas = []; let sem = []; fechas.forEach((f, i) => { sem.push(f); const sig = fechas[i + 1]; if (!sig || sig.getDay() === state.startOfWeek) { semanas.push([...sem]); sem = []; } });
+
+        const semanas = [];
+        const hasCustomWeeks = fechas.some(f => state.semanasCustom[f.toISOString().split('T')[0]]);
+        const defaultTitleFunc = (arr) => `SEMANA DEL ${arr[0].getDate()} AL ${arr[arr.length - 1].getDate()} DE ${arr[arr.length - 1].toLocaleString('es-ES', { month: 'long' }).toUpperCase()}`;
+
+        if (hasCustomWeeks) {
+            let currentSem = [];
+            let curTitle = "";
+
+            fechas.forEach((f, i) => {
+                const id = f.toISOString().split('T')[0];
+                if (state.semanasCustom[id]) {
+                    if (currentSem.length > 0) {
+                        semanas.push({ dias: currentSem, titulo: curTitle || defaultTitleFunc(currentSem) });
+                        currentSem = [];
+                    }
+                    curTitle = state.semanasCustom[id];
+                }
+                currentSem.push(f);
+            });
+            if (currentSem.length > 0) {
+                semanas.push({ dias: currentSem, titulo: curTitle || defaultTitleFunc(currentSem) });
+            }
+        } else {
+            let sem = [];
+            fechas.forEach((f, i) => {
+                sem.push(f);
+                const sig = fechas[i + 1];
+                if (!sig || sig.getDay() === state.startOfWeek) {
+                    semanas.push({ dias: [...sem], titulo: defaultTitleFunc(sem) });
+                    sem = [];
+                }
+            });
+        }
+
         const headers = ['DÍA', 'HORA', ...state.colOrder.map(k => COL_DEFS[k].toUpperCase())];
 
         let currentY = 8;
@@ -849,12 +1142,16 @@
         currentY += 3;
 
         const rows = [];
-        semanas.forEach(s => {
-            rows.push([{ content: `SEMANA DEL ${s[0].getDate()} AL ${s[s.length - 1].getDate()} DE ${s[s.length - 1].toLocaleString('es-ES', { month: 'long' }).toUpperCase()}`, colSpan: headers.length, styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 8.5, cellPadding: 0.6 } }]);
+        semanas.forEach(weekObj => {
+            const s = weekObj.dias;
+            rows.push([{ content: weekObj.titulo, colSpan: headers.length, styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 9, cellPadding: 0.6 } }]);
             s.forEach(f => {
                 const id = f.toISOString().split('T')[0];
-                if (state.comentarios[id]) rows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [255, 253, 208], fontStyle: 'bolditalic', fontSize: 8.5, cellPadding: 0.6 } }]);
-                const d = obtenerDatosDia(id), dNum = f.getDay(), cfg = state.configDias[dNum], esF = (dNum === 0 || dNum === 6), hM = esF ? (state.horario.mFin || state.horario.m) : state.horario.m, hT = esF ? (state.horario.tFin || state.horario.t) : state.horario.t;
+                if (state.comentarios[id]) rows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [255, 253, 208], fontStyle: 'bolditalic', fontSize: 9, cellPadding: 0.6 } }]);
+                const d = obtenerDatosDia(id), dNum = f.getDay(), cfg = state.configDias[dNum], esF = (dNum === 0 || dNum === 6);
+                const customH = state.horariosCustom[id] || {};
+                const hM = (customH.m !== undefined && customH.m !== '') ? customH.m : (esF ? (state.horario.mFin || state.horario.m) : state.horario.m);
+                const hT = (customH.t !== undefined && customH.t !== '') ? customH.t : (esF ? (state.horario.tFin || state.horario.t) : state.horario.t);
                 const ex = state.filasExtras[id] || [], sM = cfg.m, sT = cfg.t && hT !== '';
                 let first = true; const total = (sM ? 1 : 0) + (sT ? 1 : 0) + ex.length;
                 const addR = (hora, src, turno = '') => {
@@ -877,7 +1174,7 @@
             body: rows,
             startY: currentY,
             theme: 'grid',
-            styles: { fontSize: 8.5, fontStyle: 'bold', cellPadding: 0.4, halign: 'center' },
+            styles: { fontSize: 9, fontStyle: 'bold', cellPadding: 0.4, halign: 'center' },
             headStyles: { fillColor: [44, 62, 80], textColor: 255, cellPadding: 0.6 },
             margin: { left: 5, right: 5, top: 5, bottom: 5 },
             rowPageBreak: 'avoid'
@@ -903,8 +1200,12 @@
         document.querySelectorAll('.btn-export').forEach(btn => btn.onclick = exportarPDF);
         const inC = document.getElementById('fileConductores'); if (inC) inC.addEventListener('change', (e) => importarDesdeArchivo(e, 'conductor'));
         const inL = document.getElementById('fileLugares'); if (inL) inL.addEventListener('change', (e) => importarDesdeArchivo(e, 'lugar'));
-        document.getElementById('btnAsignarConductores').onclick = () => asignarGenerico('conductor');
-        document.getElementById('btnAsignarTerritorios').onclick = () => asignarGenerico('territorio');
+
+        if (els.btnGenerarCronograma) els.btnGenerarCronograma.onclick = () => generarCronograma();
+
+        if (els.btnConfigTer) els.btnConfigTer.onclick = () => { renderConfigTerritorios(); els.modalTer.style.display = 'flex'; };
+        if (els.btnCerrarModalTer) els.btnCerrarModalTer.onclick = () => els.modalTer.style.display = 'none';
+
         document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
         els.btnBloquear.onclick = () => { const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]), all = ids.every(i => state.bloqueados[i]); ids.forEach(i => state.bloqueados[i] = !all); actualizarTodo(); };
 
