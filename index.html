@@ -19,13 +19,17 @@
         <div id="header-actions">
             <button id="btnToggleTheme">🌓 Modo</button>
             <button id="btnBloquearTodo">🔒 Bloquear Todo</button>
-            <button id="btnAsignarTerritorios">📍 Asignar Territorios</button>
-            <button id="btnAsignarConductores">🚗 Asignar Conductores</button>
+            <button id="btnConfigTerritorios">⚙️ Configurar Territorios</button>
+            <button id="btnGenerarCronograma"
+                style="background: var(--primary); color: var(--bg); font-weight: bold; border: none;">📅
+                Generar</button>
             <button id="btnLimpiarAsignaciones">🗑️ Vaciar todo</button>
             <button id="toggleSidebar">
-                <span id="sidebarIcon" class="icon">⬅️</span>
-                <span id="sidebarText" class="text">Ocultar Panel</span>
+                <span id="sidebarIcon" class="icon">⚙️</span>
+                <span id="sidebarText" class="text">Configuración</span>
             </button>
+            <!-- Botón PDF agregado a la barra superior -->
+            <button id="btnExportPDFHeader" class="btn-export" style="margin: 0; width: auto;">📄 PDF</button>
         </div>
     </div>
 
@@ -140,35 +144,53 @@
                     </div>
 
                     <ul id="listaConductores" class="participant-list"></ul>
-            </div>
-
-            <div id="lugaresPane" class="tab-pane">
-                <h3>Gestionar Lugares</h3>
-                <input type="text" id="nuevoLugarNombre" placeholder="Lugar...">
-                <button id="btnAgregarLugar">+ Añadir</button>
-
-                <div class="btn-importar">
-                    <input type="file" id="fileLugares" accept=".txt" style="display:none">
-                    <button onclick="document.getElementById('fileLugares').click()">📂 Importar Lugares</button>
                 </div>
 
-                <ul id="listaLugares" class="participant-list"></ul>
-            </div>
+                <div id="lugaresPane" class="tab-pane">
+                    <h3>Gestionar Lugares</h3>
+                    <input type="text" id="nuevoLugarNombre" placeholder="Lugar...">
+                    <button id="btnAgregarLugar">+ Añadir</button>
 
-            <div id="gruposPane" class="tab-pane">
-                <h3>Gestionar Grupos</h3>
-                <small style="display:block; margin-bottom:5px; color:#666;">Acepta rangos (ej: 1-10) o nombres
-                    simples.</small>
-                <input type="text" id="nuevoGrupoNombre" placeholder="Ej: Grupo 1 o 1-50...">
-                <button id="btnAgregarGrupo">+ Añadir</button>
-                <div style="margin-top:5px; display:flex; gap:5px;">
-                    <button id="btnLimpiarGrupos" style="font-size:0.8em; width:auto; padding:5px;">Borrar
-                        Todos</button>
+                    <div class="btn-importar">
+                        <input type="file" id="fileLugares" accept=".txt" style="display:none">
+                        <button onclick="document.getElementById('fileLugares').click()">📂 Importar Lugares</button>
+                    </div>
+
+                    <ul id="listaLugares" class="participant-list"></ul>
                 </div>
-                <ul id="listaGrupos" class="participant-list"></ul>
+
+                <div id="gruposPane" class="tab-pane">
+                    <h3>Gestionar Grupos</h3>
+                    <small style="display:block; margin-bottom:5px; color:#666;">Acepta rangos (ej: 1-10) o nombres
+                        simples.</small>
+                    <input type="text" id="nuevoGrupoNombre" placeholder="Ej: Grupo 1 o 1-50...">
+                    <button id="btnAgregarGrupo">+ Añadir</button>
+                    <div style="margin-top:5px; display:flex; gap:5px;">
+                        <button id="btnLimpiarGrupos" style="font-size:0.8em; width:auto; padding:5px;">Borrar
+                            Todos</button>
+                    </div>
+                    <ul id="listaGrupos" class="participant-list"></ul>
+                </div>
             </div>
+        </aside>
     </div>
-    </aside>
+
+    <!-- Nuevo Modal de Territorios -->
+    <div id="modalTerritorios" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Configuración de Territorios</h3>
+                <button id="btnCerrarModalTer" class="btn-close-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="ter-config-header">
+                    <span>Territorio</span>
+                    <span>Frecuencia Mensual</span>
+                    <span>Mes / Días</span>
+                </div>
+                <ul id="listaConfigTerritorios" class="participant-list"></ul>
+            </div>
+        </div>
     </div>
     <script src="js/script.js"></script>
 
