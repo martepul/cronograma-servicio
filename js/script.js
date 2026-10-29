@@ -12,19 +12,21 @@
         CONFIG_ORDER: 'config_order_v3',
         CONFIG_DIAS: 'config_dias_v1',
         EXTRAS: 'filas_extras_v2',
+        ASIGNACIONES: 'asignaciones_v1',
         COMENTARIOS: 'comentarios_v1',
         START_WEEK: 'start_week_v1',
         THEME: 'theme_v1',
         CONFIG_TERRITORIOS: 'config_ter_v1',
         SEMANAS_CUSTOM: 'semanas_custom_v1', // Nueva llave para semanas personalizadas
-        HORARIOS_CUSTOM: 'horarios_custom_v1' // Nueva llave para horarios personalizados por día
+        HORARIOS_CUSTOM: 'horarios_custom_v1', // Nueva llave para horarios personalizados por día
+        REGLAS_GENERACION: 'reglas_generacion_v1',
+        RANGO_FECHAS: 'rango_fechas_v1'
     };
 
     const COL_DEFS = {
         lug: "Lugar de salida",
         ter: "Territorio",
         cond: "Conductor",
-        cua: "Cuadra",
         gru: "Grupo"
     };
 
@@ -34,6 +36,30 @@
     const getRangoTerritorios = () => {
         const todos = Object.values(state.mapaCoherencia).flatMap(m => m.ter || []);
         return [...new Set(todos)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    };
+
+    const obtenerUsoTerritorios = () => {
+        const uso = new Map();
+        const agregarUso = (fecha, territorio) => {
+            if (!territorio) return;
+            const registro = uso.get(territorio) || { porMes: {}, ultimaFecha: '' };
+            const mes = fecha.slice(0, 7);
+            registro.porMes[mes] = (registro.porMes[mes] || 0) + 1;
+            if (fecha > registro.ultimaFecha) registro.ultimaFecha = fecha;
+            uso.set(territorio, registro);
+        };
+
+        const fechas = new Set([
+            ...Object.keys(state.manuales),
+            ...Object.keys(state.asignaciones),
+            ...Object.keys(state.filasExtras)
+        ]);
+        fechas.forEach(fecha => {
+            const datos = obtenerDatosDia(fecha);
+            ['M', 'T'].forEach(turno => agregarUso(fecha, datos[`ter${turno}`]));
+            (state.filasExtras[fecha] || []).forEach(extra => agregarUso(fecha, extra.ter));
+        });
+        return uso;
     };
 
     // --- FORMATEO DE GRUPOS ---
@@ -70,6 +96,10 @@
         configTerritorios: {},
         semanasCustom: {}, // Nuevo estado para semanas custom
         horariosCustom: {}, // Nuevo estado para horarios custom por día
+        reglasGeneracion: {
+            visita: { activa: true, plantilla: 'Visita del superintendente de servicio al {grupo}', gruposPorMes: {} },
+            cartas: { activa: true, semanas: [1, 3], dias: [3, 5] }
+        },
         uiState: { openGroups: {} }
     };
 
@@ -132,7 +162,6 @@
             lugM: man.lugM || asig.lugM, lugT: man.lugT || asig.lugT,
             terM: man.terM || asig.terM, terT: man.terT || asig.terT,
             condM: man.condM || asig.condM, condT: man.condT || asig.condT,
-            cuaM: man.cuaM || "", cuaT: man.cuaT || "",
             gruM: man.gruM || "", gruT: man.gruT || ""
         };
     };
@@ -148,6 +177,30 @@
         for (let i = 0; i < 7; i++) d[i] = { m: true, t: true };
         return d;
     };
+
+    const obtenerSemanaDelMes = (fecha) => {
+        const primerDia = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+        const desplazamiento = (primerDia.getDay() - state.startOfWeek + 7) % 7;
+        return Math.floor((fecha.getDate() - 1 + desplazamiento) / 7) + 1;
+    };
+
+    const esTerritorioCartas = (territorio) => territorio.toLocaleLowerCase().includes('cartas');
+
+    function obtenerNotasDeVisita(fechas) {
+        const notas = new Map();
+        if (!state.reglasGeneracion.visita.activa) return notas;
+
+        fechas.forEach(fecha => {
+            if (obtenerSemanaDelMes(fecha) !== 1) return;
+            const mesId = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+            const grupo = state.reglasGeneracion.visita.gruposPorMes[mesId];
+            const nota = state.reglasGeneracion.visita.plantilla.trim();
+            if (!grupo || !nota || notas.has(mesId)) return;
+            notas.set(mesId, { fechaId: fecha.toISOString().split('T')[0], texto: nota.replace(/\{grupo\}/gi, grupo) });
+        });
+
+        return new Map([...notas.values()].map(nota => [nota.fechaId, nota.texto]));
+    }
 
     // --- PERSISTENCIA ---
     function loadFromStorage() {
@@ -175,14 +228,36 @@
             state.bloqueados = JSON.parse(localStorage.getItem(KEYS.BLOQUEADOS)) || {};
             state.horario = JSON.parse(localStorage.getItem(KEYS.HORARIO)) || { m: '', t: '', mFin: '', tFin: '' };
             state.filasExtras = JSON.parse(localStorage.getItem(KEYS.EXTRAS)) || {};
+            state.asignaciones = JSON.parse(localStorage.getItem(KEYS.ASIGNACIONES)) || {};
             state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {};
             state.configTerritorios = JSON.parse(localStorage.getItem(KEYS.CONFIG_TERRITORIOS)) || {};
             state.semanasCustom = JSON.parse(localStorage.getItem(KEYS.SEMANAS_CUSTOM)) || {};
             state.horariosCustom = JSON.parse(localStorage.getItem(KEYS.HORARIOS_CUSTOM)) || {};
+            const reglasGuardadas = JSON.parse(localStorage.getItem(KEYS.REGLAS_GENERACION));
+            if (reglasGuardadas) {
+                const semanas = reglasGuardadas.cartas?.semanas;
+                const dias = reglasGuardadas.cartas?.dias;
+                state.reglasGeneracion = {
+                    visita: {
+                        ...state.reglasGeneracion.visita,
+                        ...(reglasGuardadas.visita || {}),
+                        plantilla: typeof reglasGuardadas.visita?.plantilla === 'string'
+                            ? reglasGuardadas.visita.plantilla
+                            : state.reglasGeneracion.visita.plantilla,
+                        gruposPorMes: reglasGuardadas.visita?.gruposPorMes || {}
+                    },
+                    cartas: {
+                        ...state.reglasGeneracion.cartas,
+                        ...(reglasGuardadas.cartas || {}),
+                        semanas: Array.isArray(semanas) ? semanas : [1, 3],
+                        dias: Array.isArray(dias) ? dias : [3, 5]
+                    }
+                };
+            }
 
             const storedOrder = JSON.parse(localStorage.getItem(KEYS.CONFIG_ORDER));
             if (storedOrder) {
-                state.colOrder = storedOrder.filter(c => c !== 'zon');
+                state.colOrder = storedOrder.filter(c => COL_DEFS[c]);
             } else {
                 state.colOrder = ['lug', 'ter', 'cond'];
             }
@@ -193,6 +268,14 @@
 
             const savedStart = localStorage.getItem(KEYS.START_WEEK);
             state.startOfWeek = savedStart !== null ? parseInt(savedStart) : 1;
+            const rangoFechasGuardado = JSON.parse(localStorage.getItem(KEYS.RANGO_FECHAS));
+            if (rangoFechasGuardado) {
+                if (typeof rangoFechasGuardado.inicio === 'string') els.fInicio.value = rangoFechasGuardado.inicio;
+                if (typeof rangoFechasGuardado.final === 'string') els.fFinal.value = rangoFechasGuardado.final;
+                if (['custom', '7', '15', '30'].includes(rangoFechasGuardado.cantidad)) {
+                    els.cantFechas.value = rangoFechasGuardado.cantidad;
+                }
+            }
         } catch (e) { console.error("Error loading storage", e); }
     }
 
@@ -207,11 +290,95 @@
         localStorage.setItem(KEYS.CONFIG_ORDER, JSON.stringify(state.colOrder));
         localStorage.setItem(KEYS.CONFIG_DIAS, JSON.stringify(state.configDias));
         localStorage.setItem(KEYS.EXTRAS, JSON.stringify(state.filasExtras));
+        localStorage.setItem(KEYS.ASIGNACIONES, JSON.stringify(state.asignaciones));
         localStorage.setItem(KEYS.COMENTARIOS, JSON.stringify(state.comentarios));
         localStorage.setItem(KEYS.START_WEEK, state.startOfWeek);
         localStorage.setItem(KEYS.CONFIG_TERRITORIOS, JSON.stringify(state.configTerritorios));
         localStorage.setItem(KEYS.SEMANAS_CUSTOM, JSON.stringify(state.semanasCustom));
         localStorage.setItem(KEYS.HORARIOS_CUSTOM, JSON.stringify(state.horariosCustom));
+        localStorage.setItem(KEYS.REGLAS_GENERACION, JSON.stringify(state.reglasGeneracion));
+        localStorage.setItem(KEYS.RANGO_FECHAS, JSON.stringify({
+            inicio: els.fInicio.value,
+            final: els.fFinal.value,
+            cantidad: els.cantFechas.value
+        }));
+    }
+
+    const SAVE_FORMAT = 'cronograma-servicio-save';
+
+    function exportarGuardado() {
+        saveToStorage();
+        const datos = Object.fromEntries(
+            Object.values(KEYS).map(key => [key, localStorage.getItem(key)])
+        );
+        const guardado = {
+            format: SAVE_FORMAT,
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            data: datos
+        };
+        const archivo = new Blob([JSON.stringify(guardado, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(archivo);
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.download = `cronograma-servicio-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function importarGuardado(evento) {
+        const input = evento.target;
+        const archivo = input.files[0];
+        if (!archivo) return;
+
+        try {
+            const guardado = JSON.parse(await archivo.text());
+            const claves = Object.values(KEYS);
+            if (
+                guardado?.format !== SAVE_FORMAT ||
+                guardado?.version !== 1 ||
+                !guardado.data ||
+                !claves.every(key => Object.hasOwn(guardado.data, key) &&
+                    (typeof guardado.data[key] === 'string' || guardado.data[key] === null))
+            ) {
+                throw new Error('El archivo no tiene un formato de guardado válido o está incompleto.');
+            }
+
+            if (!confirm('Cargar este guardado reemplazará los datos actuales de esta computadora. ¿Deseas continuar?')) {
+                return;
+            }
+
+            const valoresAnteriores = Object.fromEntries(
+                claves.map(key => [key, localStorage.getItem(key)])
+            );
+            try {
+                claves.forEach(key => {
+                    const valor = guardado.data[key];
+                    if (valor === null) localStorage.removeItem(key);
+                    else localStorage.setItem(key, valor);
+                });
+            } catch (error) {
+                try {
+                    claves.forEach(key => {
+                        const valor = valoresAnteriores[key];
+                        if (valor === null) localStorage.removeItem(key);
+                        else localStorage.setItem(key, valor);
+                    });
+                } catch (errorRestauracion) {
+                    console.error('No se pudieron restaurar todos los datos anteriores.', errorRestauracion);
+                }
+                throw new Error(`No se pudo cargar el guardado: ${error.message}`);
+            }
+
+            window.location.reload();
+        } catch (error) {
+            console.error('Error al cargar el archivo de guardado.', error);
+            alert(`No se pudo cargar el archivo de guardado. ${error.message}`);
+        } finally {
+            input.value = '';
+        }
     }
 
     // --- IMPORTACIÓN ---
@@ -260,6 +427,28 @@
         const fechas = generarFechasDiarias();
         const conteoMensual = {};
         const todosTer = getRangoTerritorios();
+        const reglaCartasActiva = state.reglasGeneracion.cartas.activa;
+        const fechasCartas = fechas.filter(fecha =>
+            state.reglasGeneracion.cartas.semanas.includes(obtenerSemanaDelMes(fecha)) &&
+            state.reglasGeneracion.cartas.dias.includes(fecha.getDay())
+        );
+        const fechaCartasSinTarde = reglaCartasActiva && fechasCartas.some(fecha => {
+            const customH = state.horariosCustom[fecha.toISOString().split('T')[0]] || {};
+            const horaTarde = customH.t !== undefined && customH.t !== ''
+                ? customH.t
+                : ((fecha.getDay() === 0 || fecha.getDay() === 6) ? (state.horario.tFin || state.horario.t) : state.horario.t);
+            return !state.configDias[fecha.getDay()].t || horaTarde === '';
+        });
+        if (reglaCartasActiva && fechaCartasSinTarde) {
+            return alert("La regla de Cartas requiere activar el turno de tarde para los días seleccionados en “Días y Turnos para la tabla” y establecer un horario de tarde.");
+        }
+        const tieneTurnoCartas = reglaCartasActiva && fechasCartas.length > 0;
+        const cartasVinculado = state.lugares.some(lugar =>
+            (state.mapaCoherencia[lugar]?.ter || []).some(esTerritorioCartas)
+        );
+        if (tieneTurnoCartas && (!todosTer.some(esTerritorioCartas) || !cartasVinculado)) {
+            return alert("No hay un territorio “Cartas” vinculado a un lugar. Añádelo en la pestaña “Lugares y territorios”.");
+        }
 
         // Inicializar conteo
         todosTer.forEach(t => conteoMensual[t] = 0);
@@ -312,6 +501,12 @@
 
             ['M', 'T'].forEach(turno => {
                 if ((turno === 'M' && !configDia.m) || (turno === 'T' && !usarTarde)) return;
+                const esCitaCartas = reglaCartasActiva && turno === 'T' &&
+                    state.reglasGeneracion.cartas.semanas.includes(obtenerSemanaDelMes(f)) &&
+                    state.reglasGeneracion.cartas.dias.includes(diaNum);
+                const reservarLugaresCartas = reglaCartasActiva && turno === 'M' &&
+                    state.reglasGeneracion.cartas.semanas.includes(obtenerSemanaDelMes(f)) &&
+                    state.reglasGeneracion.cartas.dias.includes(diaNum);
 
                 const manualCond = state.manuales[id]?.[`cond${turno}`];
                 if (manualCond) usadosHoyLug.push(manualCond);
@@ -324,6 +519,9 @@
                 if (!lugAct || !terAct) {
                     const terDisponibles = todosTer.filter(t => {
                         if (usadosHoyTer.includes(t)) return false;
+                        const esCartas = esTerritorioCartas(t);
+                        if (reglaCartasActiva && esCitaCartas !== esCartas) return false;
+                        if (esCitaCartas) return true;
 
                         const cfg = state.configTerritorios[t] || { frecuencia: 4, disponibilidad: createDefaultTerDisp(), mesesActivos: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] };
                         if (!cfg.mesesActivos) cfg.mesesActivos = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -340,7 +538,10 @@
                         return true;
                     });
 
-                    const disponiblesLug = state.lugares.filter(l => !usadosHoyLug.includes(l));
+                    const disponiblesLug = state.lugares.filter(l =>
+                        !usadosHoyLug.includes(l) &&
+                        !(reservarLugaresCartas && (state.mapaCoherencia[l]?.ter || []).some(esTerritorioCartas))
+                    );
                     let combinaciones = [];
 
                     disponiblesLug.forEach(l => {
@@ -469,7 +670,7 @@
     function agregarFilaExtra(dateId, turno) {
         if (state.bloqueados[dateId]) return;
         if (!state.filasExtras[dateId]) state.filasExtras[dateId] = [];
-        state.filasExtras[dateId].push({ id: Date.now(), turno, lug: '', ter: '', cond: '', cua: '', gru: '' });
+        state.filasExtras[dateId].push({ id: Date.now(), turno, lug: '', ter: '', cond: '', gru: '' });
         actualizarTodo();
     }
 
@@ -529,7 +730,7 @@
 
     function renderColumnSelector() {
         const grid = document.querySelector('.columns-grid'); if (!grid) return; grid.innerHTML = '';
-        const all = [{ id: 'lug', lbl: 'Lugar' }, { id: 'ter', lbl: 'Territorio' }, { id: 'cond', lbl: 'Conductor' }, { id: 'cua', lbl: 'Cuadra' }, { id: 'gru', lbl: 'Grupo' }];
+        const all = [{ id: 'lug', lbl: 'Lugar' }, { id: 'ter', lbl: 'Territorio' }, { id: 'cond', lbl: 'Conductor' }, { id: 'gru', lbl: 'Grupo' }];
         all.forEach(c => {
             const label = document.createElement('label'); label.className = 'lb-col';
             const input = document.createElement('input'); input.type = 'checkbox'; input.value = c.id; input.checked = state.colOrder.includes(c.id);
@@ -555,6 +756,19 @@
         if (!els.listaConfigTer) return;
         els.listaConfigTer.innerHTML = '';
         const todosTer = getRangoTerritorios();
+        if (todosTer.length === 0) {
+            const emptyState = document.createElement('li');
+            emptyState.textContent = 'Añade territorios desde la pestaña “Lugares y territorios”.';
+            els.listaConfigTer.appendChild(emptyState);
+            return;
+        }
+
+        const usoTerritorios = obtenerUsoTerritorios();
+        const mesSeleccionado = els.fInicio.value ? els.fInicio.value.slice(0, 7) : new Date().toISOString().slice(0, 7);
+        const nombreMes = stringToDate(`${mesSeleccionado}-01`).toLocaleDateString('es-ES', {
+            month: 'long',
+            year: 'numeric'
+        });
 
         todosTer.forEach(t => {
             if (!state.configTerritorios[t]) {
@@ -572,11 +786,30 @@
             const nameSpan = document.createElement('span');
             nameSpan.textContent = t;
 
+            const uso = usoTerritorios.get(t);
+            const usadosEsteMes = uso?.porMes[mesSeleccionado] || 0;
+            const frecuencia = Number(cfg.frecuencia) || 4;
+            const infoUso = document.createElement('small');
+            infoUso.className = 'ter-usage-info';
+            infoUso.dataset.full = String(usadosEsteMes >= frecuencia);
+            infoUso.textContent = `Disponibilidad ${nombreMes}: ${usadosEsteMes}/${frecuencia} colocaciones · ${
+                usadosEsteMes < frecuencia ? `${frecuencia - usadosEsteMes} disponibles` : 'frecuencia completada'
+            }`;
+
+            const infoUltimaColocacion = document.createElement('small');
+            infoUltimaColocacion.className = 'ter-last-used';
+            infoUltimaColocacion.textContent = uso?.ultimaFecha
+                ? `Última colocación: ${stringToDate(uso.ultimaFecha).toLocaleDateString('es-ES')}`
+                : 'Última colocación: sin registros';
+
             const selFreq = document.createElement('select');
             for (let i = 1; i <= 31; i++) {
                 selFreq.add(new Option(`${i} ${i === 1 ? 'vez' : 'veces'}/mes`, i, false, cfg.frecuencia == i));
             }
-            selFreq.onchange = (e) => { cfg.frecuencia = parseInt(e.target.value); saveToStorage(); };
+            selFreq.onchange = (e) => {
+                cfg.frecuencia = parseInt(e.target.value);
+                actualizarTodo();
+            };
 
             const centerGroup = document.createElement('div');
             centerGroup.style.display = 'flex';
@@ -619,6 +852,7 @@
             centerGroup.append(tagCont, configBtn);
             topDiv.append(nameSpan, selFreq, centerGroup);
             li.appendChild(topDiv);
+            li.append(infoUso, infoUltimaColocacion);
 
             const detailsDiv = document.createElement('div');
             detailsDiv.style.display = state.uiState[uiKey] ? 'block' : 'none';
@@ -715,6 +949,79 @@
         });
     }
 
+    function renderReglasGeneracion() {
+        const visitaActiva = document.getElementById('reglaVisitaActiva');
+        const plantillaVisita = document.getElementById('plantillaNotaVisita');
+        const gruposPorMes = document.getElementById('gruposVisitaPorMes');
+        const cartasActiva = document.getElementById('reglaCartasActiva');
+        if (!visitaActiva || !plantillaVisita || !gruposPorMes || !cartasActiva) return;
+
+        const reglas = state.reglasGeneracion;
+        visitaActiva.checked = reglas.visita.activa;
+        visitaActiva.onchange = () => {
+            reglas.visita.activa = visitaActiva.checked;
+            actualizarTodo();
+        };
+
+        plantillaVisita.value = reglas.visita.plantilla;
+        plantillaVisita.onchange = () => {
+            reglas.visita.plantilla = plantillaVisita.value.trim();
+            actualizarTodo();
+        };
+
+        gruposPorMes.innerHTML = '';
+        const inicio = els.fInicio.value ? stringToDate(els.fInicio.value) : new Date();
+        const final = els.fFinal.value ? stringToDate(els.fFinal.value) : inicio;
+        const mesActual = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+        const ultimoMes = new Date(final.getFullYear(), final.getMonth(), 1);
+        while (mesActual <= ultimoMes) {
+            const mesId = `${mesActual.getFullYear()}-${String(mesActual.getMonth() + 1).padStart(2, '0')}`;
+            const contenedor = document.createElement('div');
+            contenedor.className = 'monthly-group-field';
+            const label = document.createElement('label');
+            label.textContent = mesActual.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            const selector = document.createElement('select');
+            selector.add(new Option('Sin asignar', ''));
+            state.grupos.forEach(grupo => selector.add(new Option(grupo, grupo)));
+            selector.value = reglas.visita.gruposPorMes[mesId] || '';
+            selector.onchange = () => {
+                reglas.visita.gruposPorMes[mesId] = selector.value;
+                actualizarTodo();
+            };
+            contenedor.append(label, selector);
+            gruposPorMes.appendChild(contenedor);
+            mesActual.setMonth(mesActual.getMonth() + 1);
+        }
+
+        cartasActiva.checked = reglas.cartas.activa;
+        cartasActiva.onchange = () => {
+            reglas.cartas.activa = cartasActiva.checked;
+            actualizarTodo();
+        };
+
+        document.querySelectorAll('[data-cartas-week]').forEach(input => {
+            const semana = Number(input.dataset.cartasWeek);
+            input.checked = reglas.cartas.semanas.includes(semana);
+            input.onchange = () => {
+                reglas.cartas.semanas = input.checked
+                    ? [...new Set([...reglas.cartas.semanas, semana])]
+                    : reglas.cartas.semanas.filter(item => item !== semana);
+                actualizarTodo();
+            };
+        });
+
+        document.querySelectorAll('[data-cartas-day]').forEach(input => {
+            const dia = Number(input.dataset.cartasDay);
+            input.checked = reglas.cartas.dias.includes(dia);
+            input.onchange = () => {
+                reglas.cartas.dias = input.checked
+                    ? [...new Set([...reglas.cartas.dias, dia])]
+                    : reglas.cartas.dias.filter(item => item !== dia);
+                actualizarTodo();
+            };
+        });
+    }
+
     function renderListas() {
         const draw = (l, container, tipo) => {
             container.innerHTML = '';
@@ -777,7 +1084,7 @@
                     delBtn.style.background = 'transparent';
                     delBtn.style.border = 'none';
                     delBtn.style.cursor = 'pointer';
-                    delBtn.style.color = '#d32f2f';
+                    delBtn.style.color = 'var(--accent)';
                     delBtn.onclick = () => modificarLista(tipo, 'eliminar', i);
 
                     rightGroup.append(tagCont, configBtn, delBtn);
@@ -860,6 +1167,20 @@
                     const spanName = document.createElement('span');
                     spanName.textContent = item;
                     li.appendChild(spanName);
+                    if (tipo === 'lugar') {
+                        const editBtn = document.createElement('button');
+                        editBtn.textContent = 'Editar territorios';
+                        editBtn.onclick = () => {
+                            const currentTerritories = (state.mapaCoherencia[item]?.ter || []).join(', ');
+                            const value = prompt(`Territorios para "${item}" (separados por coma):`, currentTerritories);
+                            if (value === null) return;
+                            state.mapaCoherencia[item] = {
+                                ter: [...new Set(value.split(',').map(territorio => territorio.trim()).filter(Boolean))]
+                            };
+                            actualizarTodo();
+                        };
+                        li.appendChild(editBtn);
+                    }
                     const btn = document.createElement('button');
                     btn.textContent = '×';
                     btn.onclick = () => modificarLista(tipo, 'eliminar', i);
@@ -876,7 +1197,10 @@
         state.colOrder.forEach(k => { const th = document.createElement('th'); th.textContent = COL_DEFS[k]; els.headerRow.appendChild(th); });
         els.headerRow.appendChild(Object.assign(document.createElement('th'), { className: "th-actions", textContent: "Acciones" }));
         els.tablaBody.innerHTML = '';
-        generarFechasDiarias().forEach(f => {
+        const fechas = generarFechasDiarias();
+        const notasVisita = obtenerNotasDeVisita(fechas);
+        const usoTerritorios = obtenerUsoTerritorios();
+        fechas.forEach(f => {
             const id = f.toISOString().split('T')[0], locked = state.bloqueados[id], dNum = f.getDay(), cfg = state.configDias[dNum];
             const esFinde = (dNum === 0 || dNum === 6);
             const customH = state.horariosCustom[id] || {};
@@ -890,7 +1214,7 @@
                 trW.className = 'week-row';
                 const tdW = document.createElement('td');
                 tdW.colSpan = 2 + state.colOrder.length + 1;
-                tdW.style.backgroundColor = 'rgba(33, 150, 243, 0.1)';
+                tdW.style.backgroundColor = 'var(--card-accent)';
                 tdW.style.textAlign = 'center';
                 tdW.style.fontWeight = 'bold';
                 tdW.style.padding = '5px';
@@ -902,13 +1226,24 @@
                     b.style.cursor = 'pointer';
                     b.style.border = 'none';
                     b.style.background = 'transparent';
-                    b.style.color = 'red';
+                    b.style.color = 'var(--accent)';
                     b.style.fontWeight = 'bold';
                     b.onclick = () => { delete state.semanasCustom[id]; actualizarTodo(); };
                     tdW.appendChild(b);
                 }
                 trW.appendChild(tdW);
                 els.tablaBody.appendChild(trW);
+            }
+
+            if (notasVisita.has(id)) {
+                const trRegla = document.createElement('tr');
+                trRegla.className = 'comment-row rule-note-row';
+                const tdRegla = document.createElement('td');
+                tdRegla.colSpan = 2 + state.colOrder.length + 1;
+                tdRegla.className = 'comment-cell rule-note-cell';
+                tdRegla.textContent = notasVisita.get(id);
+                trRegla.appendChild(tdRegla);
+                els.tablaBody.appendChild(trRegla);
             }
 
             if (state.comentarios[id]) {
@@ -918,7 +1253,7 @@
                 if (!locked) { const b = document.createElement('button'); b.className = 'btn-delete-note'; b.innerHTML = '&times;'; b.onclick = () => { if (confirm("¿Eliminar?")) { delete state.comentarios[id]; actualizarTodo(); } }; tdCom.appendChild(b); }
                 trCom.appendChild(tdCom); els.tablaBody.appendChild(trCom);
             }
-            const tr = document.createElement('tr'); if (locked) tr.style.opacity = "0.7";
+            const tr = document.createElement('tr');
             const tdF = tr.insertCell(); tdF.innerHTML = `<b>${DIAS_SEMANA[dNum].slice(0, 3)}</b><br>${f.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`;
             tdF.rowSpan = 1 + extras.length; tdF.style.verticalAlign = 'top';
             const tdH = tr.insertCell(); tdH.innerHTML = `<div class="stacked-cell">${showM ? `<div class="time-text ${showT ? 'border-bottom' : ''}">${hM || '--:--'}</div>` : ''}${showT ? `<div class="time-text">${hT}</div>` : ''}</div>`;
@@ -943,10 +1278,6 @@
                         wrap.appendChild(w);
                     } else if (tipo === 'gru') {
                         wrap.appendChild(crearSelectorGrupos(datos[`gru${turno}`], locked, (v) => guardarManual(id, v, `gru${turno}`)));
-                    } else if (tipo === 'cua') {
-                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: datos[`cua${turno}`] || "", disabled: locked });
-                        i.onchange = (e) => guardarManual(id, e.target.value, `cua${turno}`);
-                        wrap.appendChild(i);
                     } else {
                         const s = document.createElement('select'); s.disabled = locked; s.add(new Option("-", ""));
                         let ops = [];
@@ -967,6 +1298,23 @@
                         ops.forEach(o => s.add(new Option(o, o, false, datos[`${tipo}${turno}`] === o)));
                         s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`);
                         wrap.appendChild(s);
+                        if (tipo === 'ter' && datos[`ter${turno}`]) {
+                            const territorio = datos[`ter${turno}`];
+                            const uso = usoTerritorios.get(territorio);
+                            const usadosMes = uso?.porMes[id.slice(0, 7)] || 0;
+                            const cfgTer = state.configTerritorios[territorio];
+                            const frecuencia = Number(cfgTer?.frecuencia) || 4;
+                            const disponibles = Math.max(0, frecuencia - usadosMes);
+                            const info = document.createElement('small');
+                            info.className = 'table-territory-info';
+                            info.dataset.full = String(disponibles === 0);
+                            info.textContent = `Disponibilidad ${f.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}: quedan ${disponibles}/${frecuencia} · Última vez: ${
+                                uso?.ultimaFecha
+                                    ? stringToDate(uso.ultimaFecha).toLocaleDateString('es-ES')
+                                    : 'sin registros'
+                            }`;
+                            wrap.appendChild(info);
+                        }
                     }
                     cont.appendChild(wrap);
                 });
@@ -1014,10 +1362,8 @@
             extras.forEach(ex => {
                 const trx = document.createElement('tr');
                 trx.className = 'fila-extra';
-                if (locked) trx.style.opacity = "0.7";
-
                 const tdExH = trx.insertCell();
-                tdExH.innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? '#2196F3' : '#FF9800'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
+                tdExH.innerHTML = `<span style="border-left:3px solid ${ex.turno === 'M' ? 'var(--primary)' : 'var(--accent)'}; padding-left:5px; font-weight:bold;">${(ex.turno === 'M' ? hM : hT) || '--:--'}</span>`;
 
                 state.colOrder.forEach(t => {
                     const tdEx = trx.insertCell();
@@ -1045,10 +1391,6 @@
                         wrap.appendChild(w);
                     } else if (t === 'gru') {
                         wrap.appendChild(crearSelectorGrupos(ex[t], locked, (v) => guardarExtra(id, ex.id, t, v)));
-                    } else if (t === 'cua') {
-                        const i = Object.assign(document.createElement('input'), { type: 'text', className: 'input-cuadra', value: ex[t] || "", disabled: locked });
-                        i.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
-                        wrap.appendChild(i);
                     } else {
                         const s = document.createElement('select');
                         s.disabled = locked;
@@ -1093,11 +1435,12 @@
         els.btnBloquear.innerHTML = (ids.length > 0 && ids.every(i => state.bloqueados[i])) ? ' Desbloquear Todo' : ' Bloquear Todo';
     }
 
-    function actualizarTodo() { renderListas(); renderColumnSelector(); renderSelectorDias(); renderConfigTerritorios(); renderTabla(); saveToStorage(); }
+    function actualizarTodo() { renderListas(); renderColumnSelector(); renderSelectorDias(); renderConfigTerritorios(); renderReglasGeneracion(); renderTabla(); saveToStorage(); }
 
     function exportarPDF() {
         const formatTime = (t) => { if (!t || !t.includes(':')) return '--:--'; let [h, m] = t.split(':').map(Number); const ampm = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12; return `${h}:${m < 10 ? '0' + m : m} ${ampm}`; };
         const { jsPDF } = window.jspdf; const doc = new jsPDF('p', 'mm', 'a4'); const fechas = generarFechasDiarias(); if (fechas.length === 0) return alert("Sin fechas.");
+        const notasVisita = obtenerNotasDeVisita(fechas);
 
         const semanas = [];
         const hasCustomWeeks = fechas.some(f => state.semanasCustom[f.toISOString().split('T')[0]]);
@@ -1138,16 +1481,18 @@
         let currentY = 8;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
+        doc.setTextColor(40, 55, 74);
         doc.text(`PROGRAMA DE SERVICIO - ${fechas[0].toLocaleString('es-ES', { month: 'long' }).toUpperCase()} ${fechas[0].getFullYear()}`, 105, currentY, { align: 'center' });
         currentY += 3;
 
         const rows = [];
         semanas.forEach(weekObj => {
             const s = weekObj.dias;
-            rows.push([{ content: weekObj.titulo, colSpan: headers.length, styles: { halign: 'center', fillColor: [235, 240, 245], fontStyle: 'bold', fontSize: 9, cellPadding: 0.6 } }]);
+            rows.push([{ content: weekObj.titulo, colSpan: headers.length, styles: { halign: 'center', fillColor: [241, 237, 228], textColor: [40, 55, 74], fontStyle: 'bold', fontSize: 9, cellPadding: 0.6 } }]);
             s.forEach(f => {
                 const id = f.toISOString().split('T')[0];
-                if (state.comentarios[id]) rows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [255, 253, 208], fontStyle: 'bolditalic', fontSize: 9, cellPadding: 0.6 } }]);
+                if (notasVisita.has(id)) rows.push([{ content: notasVisita.get(id).toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [243, 238, 225], textColor: [117, 68, 54], fontStyle: 'bolditalic', fontSize: 9, cellPadding: 0.6 } }]);
+                if (state.comentarios[id]) rows.push([{ content: state.comentarios[id].toUpperCase(), colSpan: headers.length, styles: { halign: 'center', fillColor: [243, 238, 225], textColor: [117, 68, 54], fontStyle: 'bolditalic', fontSize: 9, cellPadding: 0.6 } }]);
                 const d = obtenerDatosDia(id), dNum = f.getDay(), cfg = state.configDias[dNum], esF = (dNum === 0 || dNum === 6);
                 const customH = state.horariosCustom[id] || {};
                 const hM = (customH.m !== undefined && customH.m !== '') ? customH.m : (esF ? (state.horario.mFin || state.horario.m) : state.horario.m);
@@ -1174,8 +1519,8 @@
             body: rows,
             startY: currentY,
             theme: 'grid',
-            styles: { fontSize: 9, fontStyle: 'bold', cellPadding: 0.4, halign: 'center' },
-            headStyles: { fillColor: [44, 62, 80], textColor: 255, cellPadding: 0.6 },
+            styles: { fontSize: 9, fontStyle: 'bold', cellPadding: 0.6, halign: 'center', textColor: [40, 55, 74], lineColor: [228, 222, 211] },
+            headStyles: { fillColor: [40, 55, 74], textColor: [255, 253, 249], cellPadding: 0.8 },
             margin: { left: 5, right: 5, top: 5, bottom: 5 },
             rowPageBreak: 'avoid'
         });
@@ -1189,6 +1534,10 @@
         const savedTheme = localStorage.getItem(KEYS.THEME); setTheme(savedTheme === 'dark' || (!savedTheme && systemDark.matches));
         if (btnTheme) btnTheme.onclick = () => setTheme(document.documentElement.getAttribute('data-theme') !== 'dark');
         systemDark.addEventListener('change', (e) => setTheme(e.matches));
+        document.getElementById('btnExportSave').onclick = exportarGuardado;
+        const fileSave = document.getElementById('fileSave');
+        document.getElementById('btnImportSave').onclick = () => fileSave.click();
+        fileSave.addEventListener('change', importarGuardado);
         if (!els.fInicio.value) els.fInicio.value = new Date().toISOString().split('T')[0];
         els.hManana.value = state.horario.m; els.hTarde.value = state.horario.t; els.hMananaFin.value = state.horario.mFin; els.hTardeFin.value = state.horario.tFin;
         els.diasContainer.onchange = (e) => { if (e.target.type === 'checkbox') { state.configDias[e.target.dataset.day][e.target.dataset.shift] = e.target.checked; actualizarTodo(); } };
@@ -1203,7 +1552,7 @@
 
         if (els.btnGenerarCronograma) els.btnGenerarCronograma.onclick = () => generarCronograma();
 
-        if (els.btnConfigTer) els.btnConfigTer.onclick = () => { renderConfigTerritorios(); els.modalTer.style.display = 'flex'; };
+        if (els.btnConfigTer) els.btnConfigTer.onclick = () => { renderConfigTerritorios(); renderReglasGeneracion(); els.modalTer.style.display = 'flex'; };
         if (els.btnCerrarModalTer) els.btnCerrarModalTer.onclick = () => els.modalTer.style.display = 'none';
 
         document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
@@ -1217,7 +1566,7 @@
         const updateUI = () => {
             const isH = layout.classList.contains('sidebar-hidden'), isM = window.innerWidth <= 850;
             sIcon.textContent = isM ? (isH ? "⚙️" : "❌") : (isH ? "➡️" : "⬅️");
-            sText.textContent = isM ? (isH ? "Configuración" : "Cerrar") : (isH ? "Mostrar" : "Ocultar");
+            sText.textContent = isM ? (isH ? "Panel" : "Cerrar") : (isH ? "Mostrar" : "Ocultar");
         };
 
         document.getElementById('toggleSidebar').onclick = (e) => {
@@ -1244,6 +1593,8 @@
 
         document.getElementById('btnFijarHorario').onclick = () => { state.horario = { m: els.hManana.value, t: els.hTarde.value, mFin: els.hMananaFin.value, tFin: els.hTardeFin.value }; actualizarTodo(); };
         document.querySelectorAll('.tab-button').forEach(btn => btn.onclick = () => {
+            if (btn.dataset.tab === 'territorios') renderConfigTerritorios();
+            if (btn.dataset.tab === 'reglas') renderReglasGeneracion();
             document.querySelectorAll('.tab-button, .tab-pane').forEach(el => el.classList.remove('active'));
             btn.classList.add('active'); document.getElementById(btn.dataset.tab + 'Pane').classList.add('active');
         });
