@@ -1,6 +1,22 @@
 (function () {
     // --- CONSTANTES ---
-    const KEYS = {
+    function createScopedStorageKeys(keys, namespace) {
+        return Object.fromEntries(Object.entries(keys).map(([name, legacyKey]) => {
+            const scopedKey = `${namespace}${legacyKey}`;
+            try {
+                if (localStorage.getItem(scopedKey) === null) {
+                    const legacyValue = localStorage.getItem(legacyKey);
+                    if (legacyValue !== null) localStorage.setItem(scopedKey, legacyValue);
+                }
+            } catch (error) {
+                console.error(`No se pudo migrar la clave de almacenamiento "${legacyKey}".`, error);
+            }
+            return [name, scopedKey];
+        }));
+    }
+
+    const STORAGE_NAMESPACE = 'cronograma-servicio:';
+    const KEYS = createScopedStorageKeys({
         CONDUCTORES: 'conductores_v1',
         LUGARES: 'lugares_v1',
         GRUPOS: 'grupos_v1',
@@ -21,7 +37,7 @@
         HORARIOS_CUSTOM: 'horarios_custom_v1', // Nueva llave para horarios personalizados por día
         REGLAS_GENERACION: 'reglas_generacion_v1',
         RANGO_FECHAS: 'rango_fechas_v1'
-    };
+    }, STORAGE_NAMESPACE);
 
     const COL_DEFS = {
         lug: "Lugar de salida",
@@ -336,12 +352,17 @@
         try {
             const guardado = JSON.parse(await archivo.text());
             const claves = Object.values(KEYS);
+            const clavesLegadas = claves.map(key => key.slice(STORAGE_NAMESPACE.length));
+            const datosGuardados = guardado?.data;
             if (
                 guardado?.format !== SAVE_FORMAT ||
                 guardado?.version !== 1 ||
-                !guardado.data ||
-                !claves.every(key => Object.hasOwn(guardado.data, key) &&
-                    (typeof guardado.data[key] === 'string' || guardado.data[key] === null))
+                !datosGuardados ||
+                !claves.every((key, index) => {
+                    const claveGuardada = Object.hasOwn(datosGuardados, key) ? key : clavesLegadas[index];
+                    return Object.hasOwn(datosGuardados, claveGuardada) &&
+                        (typeof datosGuardados[claveGuardada] === 'string' || datosGuardados[claveGuardada] === null);
+                })
             ) {
                 throw new Error('El archivo no tiene un formato de guardado válido o está incompleto.');
             }
@@ -354,8 +375,9 @@
                 claves.map(key => [key, localStorage.getItem(key)])
             );
             try {
-                claves.forEach(key => {
-                    const valor = guardado.data[key];
+                claves.forEach((key, index) => {
+                    const claveGuardada = Object.hasOwn(datosGuardados, key) ? key : clavesLegadas[index];
+                    const valor = datosGuardados[claveGuardada];
                     if (valor === null) localStorage.removeItem(key);
                     else localStorage.setItem(key, valor);
                 });
