@@ -118,6 +118,7 @@
         },
         uiState: { openGroups: {} }
     };
+    let conductoresStorageInvalido = false;
 
     // --- ELEMENTOS DOM ---
     const els = {
@@ -219,11 +220,27 @@
     }
 
     // --- PERSISTENCIA ---
+    function readStoredJSON(key, fallback) {
+        try {
+            const value = localStorage.getItem(key);
+            return value === null ? fallback : JSON.parse(value);
+        } catch (error) {
+            if (key === KEYS.CONDUCTORES) conductoresStorageInvalido = true;
+            console.error(`No se pudo leer la clave de almacenamiento "${key}".`, error);
+            return fallback;
+        }
+    }
+
     function loadFromStorage() {
         try {
-            const rawCond = JSON.parse(localStorage.getItem(KEYS.CONDUCTORES)) || [];
-            state.conductores = rawCond.map(c => {
-                if (typeof c === 'string') return { name: c, disponibilidad: createDefaultDisp(), cartas: false };
+            const rawCond = readStoredJSON(KEYS.CONDUCTORES, []);
+            if (!Array.isArray(rawCond)) conductoresStorageInvalido = true;
+            state.conductores = (Array.isArray(rawCond) ? rawCond : []).flatMap(c => {
+                if (typeof c === 'string') return [{ name: c, disponibilidad: createDefaultDisp(), cartas: false }];
+                if (!c || typeof c !== 'object' || Array.isArray(c)) {
+                    conductoresStorageInvalido = true;
+                    return [];
+                }
 
                 let disp = c.disponibilidad;
                 if (!disp) {
@@ -234,22 +251,26 @@
                         });
                     }
                 }
-                return { name: c.name || c, disponibilidad: disp, cartas: c.cartas || false };
+                if (typeof c.name !== 'string' || !c.name.trim()) {
+                    conductoresStorageInvalido = true;
+                    return [];
+                }
+                return [{ name: c.name, disponibilidad: disp, cartas: c.cartas || false }];
             });
 
-            state.lugares = JSON.parse(localStorage.getItem(KEYS.LUGARES)) || INITIAL_LUGARES;
-            state.grupos = JSON.parse(localStorage.getItem(KEYS.GRUPOS)) || [];
-            state.mapaCoherencia = JSON.parse(localStorage.getItem(KEYS.MAPA)) || INITIAL_MAPA;
-            state.manuales = JSON.parse(localStorage.getItem(KEYS.MANUALES)) || {};
-            state.bloqueados = JSON.parse(localStorage.getItem(KEYS.BLOQUEADOS)) || {};
-            state.horario = JSON.parse(localStorage.getItem(KEYS.HORARIO)) || { m: '', t: '', mFin: '', tFin: '' };
-            state.filasExtras = JSON.parse(localStorage.getItem(KEYS.EXTRAS)) || {};
-            state.asignaciones = JSON.parse(localStorage.getItem(KEYS.ASIGNACIONES)) || {};
-            state.comentarios = JSON.parse(localStorage.getItem(KEYS.COMENTARIOS)) || {};
-            state.configTerritorios = JSON.parse(localStorage.getItem(KEYS.CONFIG_TERRITORIOS)) || {};
-            state.semanasCustom = JSON.parse(localStorage.getItem(KEYS.SEMANAS_CUSTOM)) || {};
-            state.horariosCustom = JSON.parse(localStorage.getItem(KEYS.HORARIOS_CUSTOM)) || {};
-            const reglasGuardadas = JSON.parse(localStorage.getItem(KEYS.REGLAS_GENERACION));
+            state.lugares = readStoredJSON(KEYS.LUGARES, INITIAL_LUGARES) || INITIAL_LUGARES;
+            state.grupos = readStoredJSON(KEYS.GRUPOS, []) || [];
+            state.mapaCoherencia = readStoredJSON(KEYS.MAPA, INITIAL_MAPA) || INITIAL_MAPA;
+            state.manuales = readStoredJSON(KEYS.MANUALES, {}) || {};
+            state.bloqueados = readStoredJSON(KEYS.BLOQUEADOS, {}) || {};
+            state.horario = readStoredJSON(KEYS.HORARIO, { m: '', t: '', mFin: '', tFin: '' }) || { m: '', t: '', mFin: '', tFin: '' };
+            state.filasExtras = readStoredJSON(KEYS.EXTRAS, {}) || {};
+            state.asignaciones = readStoredJSON(KEYS.ASIGNACIONES, {}) || {};
+            state.comentarios = readStoredJSON(KEYS.COMENTARIOS, {}) || {};
+            state.configTerritorios = readStoredJSON(KEYS.CONFIG_TERRITORIOS, {}) || {};
+            state.semanasCustom = readStoredJSON(KEYS.SEMANAS_CUSTOM, {}) || {};
+            state.horariosCustom = readStoredJSON(KEYS.HORARIOS_CUSTOM, {}) || {};
+            const reglasGuardadas = readStoredJSON(KEYS.REGLAS_GENERACION, null);
             if (reglasGuardadas) {
                 const semanas = reglasGuardadas.cartas?.semanas;
                 const dias = reglasGuardadas.cartas?.dias;
@@ -271,20 +292,20 @@
                 };
             }
 
-            const storedOrder = JSON.parse(localStorage.getItem(KEYS.CONFIG_ORDER));
+            const storedOrder = readStoredJSON(KEYS.CONFIG_ORDER, null);
             if (storedOrder) {
                 state.colOrder = storedOrder.filter(c => COL_DEFS[c]);
             } else {
                 state.colOrder = ['lug', 'ter', 'cond'];
             }
 
-            const storedDias = JSON.parse(localStorage.getItem(KEYS.CONFIG_DIAS));
+            const storedDias = readStoredJSON(KEYS.CONFIG_DIAS, null);
             state.configDias = storedDias || {};
             if (!storedDias) { for (let i = 0; i < 7; i++) state.configDias[i] = { m: true, t: (i !== 0) }; }
 
             const savedStart = localStorage.getItem(KEYS.START_WEEK);
             state.startOfWeek = savedStart !== null ? parseInt(savedStart) : 1;
-            const rangoFechasGuardado = JSON.parse(localStorage.getItem(KEYS.RANGO_FECHAS));
+            const rangoFechasGuardado = readStoredJSON(KEYS.RANGO_FECHAS, null);
             if (rangoFechasGuardado) {
                 if (typeof rangoFechasGuardado.inicio === 'string') els.fInicio.value = rangoFechasGuardado.inicio;
                 if (typeof rangoFechasGuardado.final === 'string') els.fFinal.value = rangoFechasGuardado.final;
@@ -296,7 +317,10 @@
     }
 
     function saveToStorage() {
-        localStorage.setItem(KEYS.CONDUCTORES, JSON.stringify(state.conductores));
+        if (!conductoresStorageInvalido || state.conductores.length > 0) {
+            localStorage.setItem(KEYS.CONDUCTORES, JSON.stringify(state.conductores));
+            conductoresStorageInvalido = false;
+        }
         localStorage.setItem(KEYS.LUGARES, JSON.stringify(state.lugares));
         localStorage.setItem(KEYS.GRUPOS, JSON.stringify(state.grupos));
         localStorage.setItem(KEYS.MAPA, JSON.stringify(state.mapaCoherencia));
@@ -621,10 +645,14 @@
 
     function ajustarFechas(modo) {
         if (modo === 'combo') {
-            if (els.cantFechas.value === "custom") return;
-            const inicioStr = els.fInicio.value; if (!inicioStr) return;
-            let fFin = stringToDate(inicioStr); fFin.setDate(fFin.getDate() + (parseInt(els.cantFechas.value, 10) - 1));
-            els.fFinal.value = fFin.toISOString().split('T')[0];
+            if (els.cantFechas.value !== "custom") {
+                const inicioStr = els.fInicio.value;
+                if (inicioStr) {
+                    let fFin = stringToDate(inicioStr);
+                    fFin.setDate(fFin.getDate() + (parseInt(els.cantFechas.value, 10) - 1));
+                    els.fFinal.value = fFin.toISOString().split('T')[0];
+                }
+            }
         } else if (modo === 'final') {
             const inicio = stringToDate(els.fInicio.value), final = stringToDate(els.fFinal.value);
             if (final < inicio) { alert("La fecha final no puede ser anterior."); ajustarFechas('combo'); return; }
