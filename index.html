@@ -146,7 +146,7 @@
                 <button id="btnCerrarModalTer" class="btn-close-modal">×</button>
             </div>
             <div class="modal-body">
-                <p class="settings-description">El botón Generar utiliza los conductores, lugares, territorios y disponibilidades configurados aquí.</p>
+                <p class="settings-description">El botón Generar utiliza los conductores, lugares, territorios y disponibilidades configurados aquí. Marca la designación de anciano o ministerial para las asignaciones de fin de semana.</p>
                 <div id="gestionContainer">
                     <div class="tabs">
                         <button class="tab-button active" data-tab="conductores">Conductores</button>
@@ -158,6 +158,7 @@
 
                     <div id="conductoresPane" class="tab-pane active">
                         <h3>Gestionar Conductores</h3>
+                        <p class="settings-help">Para la asignación automática, marca ancianos y ministeriales: los fines de semana conducen ancianos, y un ministerial conduce una sola vez en el último día de fin de semana del mes. Asignaciones fijas: Manuel Leal (lunes por la mañana), Arquímedes Rodríguez (martes por la mañana), Jorge Espinoza (jueves por la tarde) y Randy Useche (P) (último viernes por la tarde).</p>
                         <input type="text" id="nuevoConductorNombre" placeholder="Nombre...">
                         <button id="btnAgregarConductor">+ Añadir</button>
 
@@ -198,7 +199,7 @@
 
                     <div id="territoriosPane" class="tab-pane">
                         <h3>Disponibilidad y frecuencia por territorio</h3>
-                        <small class="settings-help">Los territorios se crean y editan en la pestaña “Lugares y territorios”. Al elegir uno en la tabla, debajo verás cuántas colocaciones quedan este mes y cuándo fue la última.</small>
+                        <small class="settings-help">Los territorios se crean y editan en la pestaña “Lugares y territorios”. Al elegir uno en la tabla, debajo verás cuántas colocaciones quedan este mes y cuándo fue la última. La generación automática deja al menos 5 días entre asignaciones del mismo territorio.</small>
                         <div class="ter-config-header">
                             <span>Territorio</span>
                             <span>Frecuencia mensual</span>
@@ -211,8 +212,9 @@
                         <h3>Visita del superintendente de servicio</h3>
                         <label class="rule-toggle">
                             <input type="checkbox" id="reglaVisitaActiva">
-                            Activar nota para la primera semana de cada mes
+                            Activar asignación de visita en la primera semana de cada mes
                         </label>
+                        <p class="settings-help">Al generar el cronograma se agrega una fila extra el primer domingo del mes por la mañana, con el grupo asignado al mes, el territorio 2-A y el conductor Argenis Fermín. Se utiliza el horario de mañana configurado para domingo.</p>
                         <label class="rule-field-label" for="plantillaNotaVisita">Texto de la nota ({grupo} se reemplaza por el grupo asignado):</label>
                         <input type="text" id="plantillaNotaVisita">
                         <h4>Grupo asignado por mes</h4>
@@ -223,19 +225,7 @@
                             <input type="checkbox" id="reglaCartasActiva">
                             Activar asignación automática de Cartas
                         </label>
-                        <p class="settings-help">La regla asigna Cartas solo por la tarde, en los días seleccionados de las semanas 1 y 3 del calendario. Las semanas se cuentan según el inicio de semana configurado y esta regla prevalece sobre la frecuencia y disponibilidad normal del territorio.</p>
-                        <div class="cartas-rule-options">
-                            <fieldset>
-                                <legend>Semanas</legend>
-                                <label><input type="checkbox" data-cartas-week="1"> Primera semana</label>
-                                <label><input type="checkbox" data-cartas-week="3"> Tercera semana</label>
-                            </fieldset>
-                            <fieldset>
-                                <legend>Días (tarde)</legend>
-                                <label><input type="checkbox" data-cartas-day="3"> Miércoles</label>
-                                <label><input type="checkbox" data-cartas-day="5"> Viernes</label>
-                            </fieldset>
-                        </div>
+                        <p class="settings-help">El territorio Cartas se asigna automáticamente los miércoles por la tarde de la primera semana y los viernes por la tarde de la tercera semana del mes. Las semanas se cuentan según el inicio de semana configurado.</p>
                     </div>
                 </div>
             </div>
