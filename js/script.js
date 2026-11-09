@@ -45,6 +45,7 @@
         cond: "Conductor",
         gru: "Grupo"
     };
+    const MIN_TERRITORY_GAP_DAYS = 5;
 
     const INITIAL_LUGARES = [];
     const INITIAL_MAPA = {};
@@ -58,9 +59,11 @@
         const uso = new Map();
         const agregarUso = (fecha, territorio) => {
             if (!territorio) return;
-            const registro = uso.get(territorio) || { porMes: {}, ultimaFecha: '' };
+            const registro = uso.get(territorio) || { porMes: {}, diasPorMes: {}, ultimaFecha: '' };
             const mes = fecha.slice(0, 7);
             registro.porMes[mes] = (registro.porMes[mes] || 0) + 1;
+            if (!registro.diasPorMes[mes]) registro.diasPorMes[mes] = new Set();
+            registro.diasPorMes[mes].add(fecha);
             if (fecha > registro.ultimaFecha) registro.ultimaFecha = fecha;
             uso.set(territorio, registro);
         };
@@ -76,6 +79,14 @@
             (state.filasExtras[fecha] || []).forEach(extra => agregarUso(fecha, extra.ter));
         });
         return uso;
+    };
+
+    const crearTooltipUsoTerritorio = (territorio, mes, usoTerritorios) => {
+        const fechas = [...(usoTerritorios.get(territorio)?.diasPorMes[mes] || [])].sort();
+        if (fechas.length === 0) return '';
+        const nombreMes = stringToDate(`${mes}-01`).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        const dias = fechas.map(fecha => stringToDate(fecha).getDate()).join(', ');
+        return `Agregado en ${nombreMes} los días: ${dias}`;
     };
 
     // --- FORMATEO DE GRUPOS ---
@@ -164,7 +175,7 @@
         const fEnd = stringToDate(final);
         while (f <= fEnd) {
             const diaIndex = f.getDay();
-            if (state.configDias[diaIndex]?.m || state.configDias[diaIndex]?.t) {
+            if (state.configDias[diaIndex]?.m || state.configDias[diaIndex]?.t || esDomingoVisitaConGrupo(f)) {
                 lista.push(new Date(f));
             }
             f.setDate(f.getDate() + 1);
@@ -202,6 +213,92 @@
     };
 
     const esTerritorioCartas = (territorio) => territorio.toLocaleLowerCase().includes('cartas');
+    const esFechaCartas = (fecha) => {
+        const semana = obtenerSemanaDelMes(fecha);
+        const dia = fecha.getDay();
+        return (semana === 1 && dia === 3) || (semana === 3 && dia === 5);
+    };
+    const VISITA_EXTRA_MARKER = 'visita-mensual';
+    const esDomingoVisitaConGrupo = (fecha) => {
+        const mesId = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+        return state.reglasGeneracion.visita.activa &&
+            fecha.getDay() === 0 &&
+            fecha.getDate() <= 7 &&
+            Boolean(state.reglasGeneracion.visita.gruposPorMes[mesId]) &&
+            (state.filasExtras[fecha.toISOString().split('T')[0]] || [])
+                .some(fila => fila.regla === VISITA_EXTRA_MARKER);
+    };
+
+    function sincronizarFilaExtraVisita() {
+        const inicio = els.fInicio.value;
+        const final = els.fFinal.value;
+        if (!inicio || !final) return '';
+
+        const inicioFecha = stringToDate(inicio);
+        const finalFecha = stringToDate(final);
+        const esperadas = new Map();
+        const mes = new Date(inicioFecha.getFullYear(), inicioFecha.getMonth(), 1);
+        const ultimoMes = new Date(finalFecha.getFullYear(), finalFecha.getMonth(), 1);
+
+        while (mes <= ultimoMes) {
+            const mesId = `${mes.getFullYear()}-${String(mes.getMonth() + 1).padStart(2, '0')}`;
+            const grupo = state.reglasGeneracion.visita.gruposPorMes[mesId];
+            if (state.reglasGeneracion.visita.activa && grupo) {
+                const domingo = new Date(mes);
+                while (domingo.getMonth() === mes.getMonth() && domingo.getDay() !== 0) {
+                    domingo.setDate(domingo.getDate() + 1);
+                }
+                if (domingo.getMonth() === mes.getMonth() && domingo >= inicioFecha && domingo <= finalFecha) {
+                    esperadas.set(domingo.toISOString().split('T')[0], grupo);
+                }
+            }
+            mes.setMonth(mes.getMonth() + 1);
+        }
+
+        if (esperadas.size === 0) {
+            Object.keys(state.filasExtras).forEach(fecha => {
+                if (fecha < inicio || fecha > final || state.bloqueados[fecha]) return;
+                state.filasExtras[fecha] = (state.filasExtras[fecha] || []).filter(fila => fila.regla !== VISITA_EXTRA_MARKER);
+            });
+            return '';
+        }
+
+        const territorio = getRangoTerritorios().find(nombre => nombre.trim().toLocaleLowerCase() === '2-a');
+        if (!territorio) return 'No se encontró el territorio “2-A”.';
+        const lugar = state.lugares.find(nombre => (state.mapaCoherencia[nombre]?.ter || []).includes(territorio));
+        if (!lugar) return 'El territorio “2-A” no está vinculado a ningún lugar.';
+        const conductor = state.conductores.find(item => item.name.trim() === 'Argenis Fermín');
+        if (!conductor) return 'No se encontró el conductor “Argenis Fermín”.';
+
+        for (const fecha of esperadas.keys()) {
+            if (state.bloqueados[fecha]) {
+                esperadas.delete(fecha);
+                continue;
+            }
+            const horarioManana = state.horariosCustom[fecha]?.m !== undefined && state.horariosCustom[fecha].m !== ''
+                ? state.horariosCustom[fecha].m
+                : (state.horario.mFin || state.horario.m);
+            if (!horarioManana) return `Configura un horario de mañana para domingo antes de asignar la visita (${fecha}).`;
+        }
+
+        Object.keys(state.filasExtras).forEach(fecha => {
+            if (fecha < inicio || fecha > final || state.bloqueados[fecha]) return;
+            if (!esperadas.has(fecha)) {
+                state.filasExtras[fecha] = (state.filasExtras[fecha] || []).filter(fila => fila.regla !== VISITA_EXTRA_MARKER);
+            }
+        });
+
+        esperadas.forEach((grupo, fecha) => {
+            if (!state.filasExtras[fecha]) state.filasExtras[fecha] = [];
+            let fila = state.filasExtras[fecha].find(item => item.regla === VISITA_EXTRA_MARKER);
+            if (!fila) {
+                fila = { id: Date.now() + Math.random(), turno: 'M', regla: VISITA_EXTRA_MARKER };
+                state.filasExtras[fecha].push(fila);
+            }
+            Object.assign(fila, { turno: 'M', lug: lugar, ter: territorio, cond: conductor.name, gru: grupo });
+        });
+        return '';
+    }
 
     function obtenerNotasDeVisita(fechas) {
         const notas = new Map();
@@ -255,7 +352,12 @@
                     conductoresStorageInvalido = true;
                     return [];
                 }
-                return [{ name: c.name, disponibilidad: disp, cartas: c.cartas || false }];
+                return [{
+                    name: c.name,
+                    disponibilidad: disp,
+                    cartas: c.cartas || false,
+                    designacion: ['anciano', 'ministerial'].includes(c.designacion) ? c.designacion : ''
+                }];
             });
 
             state.lugares = readStoredJSON(KEYS.LUGARES, INITIAL_LUGARES) || INITIAL_LUGARES;
@@ -443,7 +545,7 @@
                 if (tipo === 'conductor') {
                     const nombre = partes[0];
                     if (nombre && !state.conductores.some(c => c.name === nombre)) {
-                        state.conductores.push({ name: nombre, disponibilidad: createDefaultDisp(), cartas: false });
+                        state.conductores.push({ name: nombre, disponibilidad: createDefaultDisp(), cartas: false, designacion: '' });
                         agregados++;
                     }
                 } else if (tipo === 'lugar') {
@@ -470,14 +572,69 @@
         if (state.conductores.length === 0) return alert("Faltan conductores configurados.");
         if (state.lugares.length === 0) return alert("Faltan lugares configurados.");
 
+        const errorVisita = sincronizarFilaExtraVisita();
+        if (errorVisita) return alert(errorVisita);
         const fechas = generarFechasDiarias();
+        const normalizarNombre = nombre => nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase();
+        const esUltimoDiaFinDeSemanaMes = fecha => {
+            const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
+            while (ultimoDia.getDay() !== 0 && ultimoDia.getDay() !== 6) ultimoDia.setDate(ultimoDia.getDate() - 1);
+            return fecha.getDate() === ultimoDia.getDate();
+        };
+        const esUltimoViernesMes = fecha => {
+            const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
+            while (ultimoDia.getDay() !== 5) ultimoDia.setDate(ultimoDia.getDate() - 1);
+            return fecha.getDate() === ultimoDia.getDate();
+        };
+        const conductorFijoPara = (fecha, turno) => {
+            const dia = fecha.getDay();
+            if (turno === 'M' && dia === 1) return 'Manuel Leal';
+            if (turno === 'M' && dia === 2) return 'Arquímedes Rodríguez';
+            if (turno === 'T' && dia === 4) return 'Jorge Espinoza';
+            if (turno === 'T' && dia === 5 && esUltimoViernesMes(fecha)) return 'Randy Useche (P)';
+            return '';
+        };
+        const conductoresFijosFaltantes = new Set();
+        let requiereAncianoFinDeSemana = false;
+        let requiereMinisterial = false;
+        fechas.forEach(fecha => {
+            const id = fecha.toISOString().split('T')[0];
+            if ((targetId && targetId !== id) || state.bloqueados[id]) return;
+            ['M', 'T'].forEach(turno => {
+                const customH = state.horariosCustom[id] || {};
+                const horaTarde = customH.t !== undefined && customH.t !== ''
+                    ? customH.t
+                    : ((fecha.getDay() === 0 || fecha.getDay() === 6) ? (state.horario.tFin || state.horario.t) : state.horario.t);
+                const turnoActivo = turno === 'M'
+                    ? state.configDias[fecha.getDay()].m
+                    : state.configDias[fecha.getDay()].t && horaTarde !== '';
+                if (turnoActivo && !state.manuales[id]?.[`cond${turno}`]) {
+                    if (fecha.getDay() === 0 || fecha.getDay() === 6) {
+                        requiereAncianoFinDeSemana = true;
+                        if (esUltimoDiaFinDeSemanaMes(fecha)) requiereMinisterial = true;
+                    }
+                }
+                const nombre = turnoActivo && !state.manuales[id]?.[`cond${turno}`]
+                    ? conductorFijoPara(fecha, turno)
+                    : '';
+                if (nombre && !state.conductores.some(conductor => normalizarNombre(conductor.name) === normalizarNombre(nombre))) {
+                    conductoresFijosFaltantes.add(nombre);
+                }
+            });
+        });
+        if (conductoresFijosFaltantes.size > 0) {
+            return alert(`Añade estos conductores para aplicar las asignaciones fijas: ${[...conductoresFijosFaltantes].join(', ')}.`);
+        }
+        if (requiereAncianoFinDeSemana && !state.conductores.some(conductor => conductor.designacion === 'anciano')) {
+            return alert('Designa al menos un conductor como anciano de congregación para asignar los fines de semana.');
+        }
+        if (requiereMinisterial && !state.conductores.some(conductor => conductor.designacion === 'ministerial')) {
+            return alert('Designa al menos un conductor como ministerial para la última fecha de fin de semana del mes.');
+        }
         const conteoMensual = {};
         const todosTer = getRangoTerritorios();
         const reglaCartasActiva = state.reglasGeneracion.cartas.activa;
-        const fechasCartas = fechas.filter(fecha =>
-            state.reglasGeneracion.cartas.semanas.includes(obtenerSemanaDelMes(fecha)) &&
-            state.reglasGeneracion.cartas.dias.includes(fecha.getDay())
-        );
+        const fechasCartas = fechas.filter(esFechaCartas);
         const fechaCartasSinTarde = reglaCartasActiva && fechasCartas.some(fecha => {
             const customH = state.horariosCustom[fecha.toISOString().split('T')[0]] || {};
             const horaTarde = customH.t !== undefined && customH.t !== ''
@@ -525,6 +682,52 @@
             });
         });
 
+        const mesesConMinisterial = new Set();
+        const fechasConConductores = new Set([
+            ...Object.keys(state.manuales),
+            ...Object.keys(state.asignaciones)
+        ]);
+        fechasConConductores.forEach(fecha => {
+            const dia = stringToDate(fecha);
+            if (dia.getDay() !== 0 && dia.getDay() !== 6) return;
+            const datos = obtenerDatosDia(fecha);
+            ['M', 'T'].forEach(turno => {
+                const nombre = datos[`cond${turno}`];
+                if (!nombre) return;
+                const conductor = state.conductores.find(item => item.name === nombre);
+                if (!conductor) return;
+                if (conductor.designacion === 'ministerial' && esUltimoDiaFinDeSemanaMes(dia)) {
+                    mesesConMinisterial.add(fecha.slice(0, 7));
+                }
+            });
+        });
+
+        const fechasPorTerritorio = new Map(todosTer.map(territorio => [territorio, new Set()]));
+        const registrarFechaTerritorio = (territorio, fecha) => {
+            if (!territorio) return;
+            if (!fechasPorTerritorio.has(territorio)) fechasPorTerritorio.set(territorio, new Set());
+            fechasPorTerritorio.get(territorio).add(fecha);
+        };
+        const fechasConAsignaciones = new Set([
+            ...Object.keys(state.manuales),
+            ...Object.keys(state.asignaciones),
+            ...Object.keys(state.filasExtras)
+        ]);
+        fechasConAsignaciones.forEach(fecha => {
+            const datos = obtenerDatosDia(fecha);
+            ['M', 'T'].forEach(turno => registrarFechaTerritorio(datos[`ter${turno}`], fecha));
+            (state.filasExtras[fecha] || []).forEach(extra => registrarFechaTerritorio(extra.ter, fecha));
+        });
+        const tieneDistanciaMinima = (territorio, fecha) => {
+            const [year, month, day] = fecha.split('-').map(Number);
+            const fechaOrdinal = Date.UTC(year, month - 1, day) / 86400000;
+            return [...(fechasPorTerritorio.get(territorio) || [])].every(fechaExistente => {
+                const [yearExistente, monthExistente, dayExistente] = fechaExistente.split('-').map(Number);
+                const ordinalExistente = Date.UTC(yearExistente, monthExistente - 1, dayExistente) / 86400000;
+                return Math.abs(fechaOrdinal - ordinalExistente) >= MIN_TERRITORY_GAP_DAYS;
+            });
+        };
+
         // 2. Asignar dinámicamente según configuración
         fechas.forEach(f => {
             const id = f.toISOString().split('T')[0];
@@ -547,12 +750,9 @@
 
             ['M', 'T'].forEach(turno => {
                 if ((turno === 'M' && !configDia.m) || (turno === 'T' && !usarTarde)) return;
-                const esCitaCartas = reglaCartasActiva && turno === 'T' &&
-                    state.reglasGeneracion.cartas.semanas.includes(obtenerSemanaDelMes(f)) &&
-                    state.reglasGeneracion.cartas.dias.includes(diaNum);
-                const reservarLugaresCartas = reglaCartasActiva && turno === 'M' &&
-                    state.reglasGeneracion.cartas.semanas.includes(obtenerSemanaDelMes(f)) &&
-                    state.reglasGeneracion.cartas.dias.includes(diaNum);
+                const esFechaProgramadaCartas = esFechaCartas(f);
+                const esCitaCartas = reglaCartasActiva && turno === 'T' && esFechaProgramadaCartas;
+                const reservarLugaresCartas = reglaCartasActiva && turno === 'M' && esFechaProgramadaCartas;
 
                 const manualCond = state.manuales[id]?.[`cond${turno}`];
                 if (manualCond) usadosHoyLug.push(manualCond);
@@ -565,6 +765,7 @@
                 if (!lugAct || !terAct) {
                     const terDisponibles = todosTer.filter(t => {
                         if (usadosHoyTer.includes(t)) return false;
+                        if (!tieneDistanciaMinima(t, id)) return false;
                         const esCartas = esTerritorioCartas(t);
                         if (reglaCartasActiva && esCitaCartas !== esCartas) return false;
                         if (esCitaCartas) return true;
@@ -610,6 +811,7 @@
                         usadosHoyLug.push(lugAct);
                         usadosHoyTer.push(terAct);
                         conteoMensual[terAct]++;
+                        registrarFechaTerritorio(terAct, id);
                     }
                 } else {
                     usadosHoyLug.push(lugAct);
@@ -618,8 +820,10 @@
 
                 if (!manualCond) {
                     const esCartas = terAct && terAct.toLowerCase().includes('cartas');
-                    const poolCond = state.conductores.filter(c => {
+                    const fijoEnOtroTurno = conductorFijoPara(f, turno === 'M' ? 'T' : 'M');
+                    const disponibles = state.conductores.filter(c => {
                         if (usadosHoyLug.includes(c.name)) return false;
+                        if (fijoEnOtroTurno && normalizarNombre(c.name) === normalizarNombre(fijoEnOtroTurno)) return false;
                         if (esCartas && c.cartas) return true;
 
                         const hasAnyConfig = Object.values(c.disponibilidad).some(d => d.m || d.t);
@@ -627,14 +831,28 @@
 
                         return turno === 'M' ? c.disponibilidad[diaNum].m : c.disponibilidad[diaNum].t;
                     });
-
+                    const esUltimoFinde = esFinde && esUltimoDiaFinDeSemanaMes(f);
+                    const ministerialesDesignados = esUltimoFinde && !mesesConMinisterial.has(id.slice(0, 7))
+                        ? state.conductores.filter(c => c.designacion === 'ministerial' && !usadosHoyLug.includes(c.name))
+                        : [];
+                    const poolCond = esFinde
+                        ? (ministerialesDesignados.length > 0
+                            ? ministerialesDesignados
+                            : disponibles.filter(c => c.designacion === 'anciano'))
+                        : disponibles;
                     const prioritarios = poolCond.filter(c => turno === 'M' ? c.disponibilidad[diaNum].pM : c.disponibilidad[diaNum].pT);
                     const listaFinal = prioritarios.length > 0 ? prioritarios : poolCond;
-                    const elegido = listaFinal[Math.floor(Math.random() * listaFinal.length)];
+                    const nombreFijo = conductorFijoPara(f, turno);
+                    const elegido = nombreFijo
+                        ? state.conductores.find(c => normalizarNombre(c.name) === normalizarNombre(nombreFijo))
+                        : listaFinal[Math.floor(Math.random() * listaFinal.length)];
 
                     if (elegido) {
                         asig[`cond${turno}`] = elegido.name;
                         usadosHoyLug.push(elegido.name);
+                        if (esUltimoFinde && elegido.designacion === 'ministerial') {
+                            mesesConMinisterial.add(id.slice(0, 7));
+                        }
                     }
                 }
             });
@@ -668,7 +886,7 @@
         else if (tipo === 'grupo') { lista = state.grupos; input = els.nuevoGrupo; }
         if (accion === 'agregar') {
             const raw = input.value.trim(); if (!raw) return;
-            if (tipo === 'conductor') { if (!lista.some(c => c.name === raw)) { lista.push({ name: raw, disponibilidad: createDefaultDisp(), cartas: false }); input.value = ''; actualizarTodo(); } return; }
+            if (tipo === 'conductor') { if (!lista.some(c => c.name === raw)) { lista.push({ name: raw, disponibilidad: createDefaultDisp(), cartas: false, designacion: '' }); input.value = ''; actualizarTodo(); } return; }
             if (tipo === 'grupo') {
                 const range = raw.match(/^(\d+)-(\d+)$/);
                 if (range) { for (let i = parseInt(range[1]); i <= parseInt(range[2]); i++) { if (!lista.includes(`Grupo ${i}`)) lista.push(`Grupo ${i}`); } input.value = ''; actualizarTodo(); return; }
@@ -1049,27 +1267,6 @@
             actualizarTodo();
         };
 
-        document.querySelectorAll('[data-cartas-week]').forEach(input => {
-            const semana = Number(input.dataset.cartasWeek);
-            input.checked = reglas.cartas.semanas.includes(semana);
-            input.onchange = () => {
-                reglas.cartas.semanas = input.checked
-                    ? [...new Set([...reglas.cartas.semanas, semana])]
-                    : reglas.cartas.semanas.filter(item => item !== semana);
-                actualizarTodo();
-            };
-        });
-
-        document.querySelectorAll('[data-cartas-day]').forEach(input => {
-            const dia = Number(input.dataset.cartasDay);
-            input.checked = reglas.cartas.dias.includes(dia);
-            input.onchange = () => {
-                reglas.cartas.dias = input.checked
-                    ? [...new Set([...reglas.cartas.dias, dia])]
-                    : reglas.cartas.dias.filter(item => item !== dia);
-                actualizarTodo();
-            };
-        });
     }
 
     function renderListas() {
@@ -1140,6 +1337,23 @@
                     rightGroup.append(tagCont, configBtn, delBtn);
                     topRow.append(nameSpan, rightGroup);
                     li.appendChild(topRow);
+
+                    const roleLabel = document.createElement('label');
+                    roleLabel.className = 'conductor-role-label';
+                    roleLabel.textContent = 'Designación';
+                    const roleSelect = document.createElement('select');
+                    roleSelect.className = 'conductor-role-select';
+                    roleSelect.setAttribute('aria-label', `Designación de ${item.name}`);
+                    roleSelect.add(new Option('Sin designación', ''));
+                    roleSelect.add(new Option('Anciano de congregación', 'anciano'));
+                    roleSelect.add(new Option('Ministerial', 'ministerial'));
+                    roleSelect.value = item.designacion || '';
+                    roleSelect.onchange = () => {
+                        item.designacion = roleSelect.value;
+                        saveToStorage();
+                    };
+                    roleLabel.appendChild(roleSelect);
+                    li.appendChild(roleLabel);
 
                     const detailsDiv = document.createElement('div');
                     detailsDiv.style.display = state.uiState[uiKey] ? 'block' : 'none';
@@ -1346,6 +1560,9 @@
                         }
                         if (tipo === 'cond' && datos[`cond${turno}`] && !ops.includes(datos[`cond${turno}`])) ops.push(datos[`cond${turno}`]);
                         ops.forEach(o => s.add(new Option(o, o, false, datos[`${tipo}${turno}`] === o)));
+                        if (tipo === 'ter' && datos[`ter${turno}`]) {
+                            s.title = crearTooltipUsoTerritorio(datos[`ter${turno}`], id.slice(0, 7), usoTerritorios);
+                        }
                         s.onchange = (e) => guardarManual(id, e.target.value, `${tipo}${turno}`);
                         wrap.appendChild(s);
                         if (tipo === 'ter' && datos[`ter${turno}`]) {
@@ -1355,10 +1572,14 @@
                             const cfgTer = state.configTerritorios[territorio];
                             const frecuencia = Number(cfgTer?.frecuencia) || 4;
                             const disponibles = Math.max(0, frecuencia - usadosMes);
+                            const fechasMes = [...(uso?.diasPorMes[id.slice(0, 7)] || [])]
+                                .sort()
+                                .map(fecha => stringToDate(fecha).getDate())
+                                .join(', ');
                             const info = document.createElement('small');
                             info.className = 'table-territory-info';
                             info.dataset.full = String(disponibles === 0);
-                            info.textContent = `Disponibilidad ${f.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}: quedan ${disponibles}/${frecuencia} · Última vez: ${
+                            info.textContent = `Días este mes: ${fechasMes || 'ninguno'} · Quedan ${disponibles}/${frecuencia} · Última vez: ${
                                 uso?.ultimaFecha
                                     ? stringToDate(uso.ultimaFecha).toLocaleDateString('es-ES')
                                     : 'sin registros'
@@ -1459,7 +1680,11 @@
                         } else if (t === 'ter') {
                             ops = getRangoTerritorios();
                         }
+                        if (ex[t] && !ops.includes(ex[t])) ops.push(ex[t]);
                         ops.forEach(o => s.add(new Option(o, o, false, ex[t] === o)));
+                        if (t === 'ter' && ex[t]) {
+                            s.title = crearTooltipUsoTerritorio(ex[t], id.slice(0, 7), usoTerritorios);
+                        }
                         s.onchange = (e) => guardarExtra(id, ex.id, t, e.target.value);
                         wrap.appendChild(s);
                     }
@@ -1605,7 +1830,18 @@
         if (els.btnConfigTer) els.btnConfigTer.onclick = () => { renderConfigTerritorios(); renderReglasGeneracion(); els.modalTer.style.display = 'flex'; };
         if (els.btnCerrarModalTer) els.btnCerrarModalTer.onclick = () => els.modalTer.style.display = 'none';
 
-        document.getElementById('btnLimpiarAsignaciones').onclick = () => { if (confirm("¿Vaciar?")) { generarFechasDiarias().forEach(f => { const id = f.toISOString().split('T')[0]; if (!state.bloqueados[id]) delete state.asignaciones[id]; }); actualizarTodo(); } };
+        document.getElementById('btnLimpiarAsignaciones').onclick = () => {
+            if (!confirm("¿Vaciar las asignaciones del rango actual?")) return;
+
+            const borrarManuales = confirm("¿Borrar también las asignaciones manuales? Aceptar: borrar manuales. Cancelar: conservarlas.");
+            generarFechasDiarias().forEach(f => {
+                const id = f.toISOString().split('T')[0];
+                if (state.bloqueados[id]) return;
+                delete state.asignaciones[id];
+                if (borrarManuales) delete state.manuales[id];
+            });
+            actualizarTodo();
+        };
         els.btnBloquear.onclick = () => { const ids = generarFechasDiarias().map(f => f.toISOString().split('T')[0]), all = ids.every(i => state.bloqueados[i]); ids.forEach(i => state.bloqueados[i] = !all); actualizarTodo(); };
 
         const layout = document.querySelector('.main-layout');
