@@ -2515,3 +2515,191 @@ select:focus {
         margin-bottom: 12px;
     }
 }
+
+@media screen and (max-width: 600px) {
+    .modal-body,
+    #gestionContainer {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .modal-body {
+        overflow-x: hidden;
+    }
+
+    #gestionContainer .tab-pane > h3 {
+        font-size: 0.95rem;
+        line-height: 1.3;
+        margin: 6px 0 8px;
+    }
+
+    #reglasPane h4 {
+        font-size: 0.88rem;
+        line-height: 1.3;
+        margin: 12px 0 6px;
+    }
+
+    #reglasPane .rule-toggle,
+    #reglasPane .rule-field-label {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        margin: 8px 0;
+    }
+
+    #reglasPane .settings-help {
+        font-size: 0.76rem;
+        line-height: 1.4;
+        margin: 6px 0 10px;
+    }
+
+    #reglasPane #plantillaNotaVisita {
+        font-size: 0.82rem;
+        padding: 8px 10px;
+        margin-bottom: 10px;
+    }
+
+    #reglasPane .monthly-group-field label {
+        font-size: 0.72rem;
+        line-height: 1.3;
+        margin-bottom: 3px;
+    }
+
+    #reglasPane .monthly-group-field select {
+        font-size: 0.78rem;
+        padding: 6px 7px;
+    }
+
+    #territoriosPane > .settings-help {
+        font-size: 0.78rem;
+        line-height: 1.45;
+        margin-bottom: 10px;
+    }
+
+    .ter-config-item {
+        padding: 9px;
+        margin-bottom: 8px;
+        gap: 2px;
+    }
+
+    .ter-config-main {
+        grid-template-columns: minmax(0, 0.7fr) minmax(120px, 1fr);
+        gap: 8px;
+    }
+
+    .ter-config-main > span {
+        font-size: 0.9rem;
+        line-height: 1.3;
+        text-align: left;
+    }
+
+    .ter-config-main select {
+        font-size: 0.8rem;
+    }
+
+    .ter-config-main .tag-container {
+        flex: 1;
+        min-width: 0;
+        justify-content: space-between;
+        gap: 2px;
+    }
+
+    .ter-config-main .btn-tag {
+        min-width: 21px;
+        padding: 2px;
+        font-size: 0.64rem;
+    }
+
+    .ter-config-main > div {
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .ter-usage-info,
+    .ter-last-used {
+        font-size: 0.78rem;
+        line-height: 1.4;
+        margin-top: 5px;
+    }
+
+    #listaConductores .participant-item-complex {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: 8px;
+        gap: 5px;
+    }
+
+    #listaConductores .participant-item-complex > div:first-child {
+        flex-wrap: wrap;
+        gap: 5px;
+        min-width: 0;
+    }
+
+    #listaConductores .participant-item-complex > div:first-child > span {
+        flex: 1 1 100% !important;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-size: 0.82rem;
+        line-height: 1.3;
+    }
+
+    #listaConductores .participant-item-complex > div:first-child > div {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+        justify-content: space-between;
+        margin: 0;
+    }
+
+    #listaConductores .tag-container {
+        flex: 1;
+        min-width: 0;
+        justify-content: space-between;
+        gap: 3px;
+        margin: 0;
+    }
+
+    #listaConductores .btn-tag {
+        min-width: 25px;
+        padding: 3px 4px;
+        font-size: 0.66rem;
+    }
+
+    .conductor-role-label {
+        flex-wrap: wrap;
+        gap: 4px;
+        font-size: 0.72rem;
+    }
+
+    .conductor-role-select {
+        flex: 1 1 100%;
+        width: 100%;
+        font-size: 0.76rem !important;
+        padding: 6px 8px !important;
+    }
+
+    #listaLugares li {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 5px 8px;
+        align-items: center;
+        min-width: 0;
+        padding: 8px;
+    }
+
+    #listaLugares li span {
+        grid-column: 1 / -1;
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-size: 0.82rem;
+        line-height: 1.3;
+    }
+
+    #listaLugares li button {
+        min-width: 0;
+        margin: 0;
+        padding: 5px 8px;
+        font-size: 0.74rem;
+    }
+}
