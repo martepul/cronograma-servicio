@@ -2565,8 +2565,16 @@ select:focus {
     }
 
     #reglasPane .monthly-group-field select {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
         font-size: 0.78rem;
         padding: 6px 7px;
+    }
+
+    #reglasPane .monthly-groups-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
     }
 
     #territoriosPane > .settings-help {
