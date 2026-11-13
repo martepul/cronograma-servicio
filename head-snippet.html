@@ -1,0 +1,13 @@
+<!-- 1) Pega esto dentro de <head> en index.html, debajo del <link rel="icon"...> -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#28362c">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- 2) Pega esto justo antes de </body>, debajo de <script src="js/script.js"></script> -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').catch(console.error);
+        });
+    }
+</script>
