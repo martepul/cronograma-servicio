@@ -14,6 +14,14 @@
     <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#e4e5c8">
+    <script>
+        (function () {
+            var m = document.querySelector('meta[name="theme-color"]');
+            function u() { m.setAttribute('content', document.documentElement.getAttribute('data-theme') === 'dark' ? '#1d1d1a' : '#e4e5c8'); }
+            u();
+            new MutationObserver(u).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        })();
+    </script>
     <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 

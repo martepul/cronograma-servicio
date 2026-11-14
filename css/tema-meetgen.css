@@ -282,6 +282,10 @@ th { padding: 12px 12px !important; }
         position: fixed;
         left: 10px;
         right: 10px;
+        width: auto !important;
+        max-width: calc(100vw - 20px);
+        box-sizing: border-box;
+        justify-content: flex-start;
         bottom: calc(10px + env(safe-area-inset-bottom));
         z-index: 60;
         flex-wrap: nowrap;
@@ -295,6 +299,7 @@ th { padding: 12px 12px !important; }
         mask-image: linear-gradient(to right, #000 88%, transparent);
     }
     #header-actions::-webkit-scrollbar { display: none; }
+    [data-theme="dark"] #header-actions { background: #34342d; }
 
     #header-actions button {
         flex: 0 0 auto;
