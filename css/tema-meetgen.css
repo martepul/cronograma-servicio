@@ -1,0 +1,495 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap");
+
+/* =========================================================
+   TEMA MEETGEN — se carga DESPUÉS de style.css
+   Crema + naranja (claro) / carbón + naranja (oscuro)
+   ========================================================= */
+
+:root {
+    --bg: #e4e5c8;
+    --card-bg: #f7f5dc;
+    --card-accent: #d7d8b6;
+    --text-main: #22231e;
+    --text-muted: #5d5f4c;
+    --primary: #22231e;
+    --accent: #c4410f;
+    --accent-contrast: #1f201b;
+    --row-green: #f9d3c2;
+    --border: #cfd0ae;
+    --border-th: #b9bb94;
+    --row-hover: #efeccf;
+    --overlay: rgb(20 20 15 / 45%);
+    --pop: #f26a3d;
+    --pop-soft: #f9d3c2;
+    --paper: #fffcea;
+    --r-lg: 26px;
+    --r-md: 16px;
+    --code-font: "Bricolage Grotesque", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+[data-theme="dark"] {
+    --bg: #1d1d1a;
+    --card-bg: #2a2a26;
+    --card-accent: #36362f;
+    --text-main: #f3f0d9;
+    --text-muted: #b2b095;
+    --primary: #f3f0d9;
+    --accent: #ff8257;
+    --accent-contrast: #1d1d1a;
+    --row-green: #4a3225;
+    --border: #3e3e36;
+    --border-th: #55554a;
+    --row-hover: #32322c;
+    --overlay: rgb(0 0 0 / 65%);
+    --pop-soft: #4a3225;
+    --paper: #3a3a33;
+}
+
+body {
+    font-family: var(--code-font);
+    line-height: 1.4;
+    padding: clamp(10px, 2.5vw, 28px);
+}
+
+@media (min-width: 1100px) {
+    body { max-width: 1320px; margin-inline: auto; }
+}
+
+/* ---------- Cabecera ---------- */
+.header-flex {
+    border-bottom: 0;
+    padding-bottom: 0;
+    margin-bottom: 14px;
+}
+
+.header-title {
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    font-size: clamp(1.3rem, 2.4vw, 2rem);
+}
+
+.header-title::after {
+    content: "";
+    display: inline-block;
+    width: 0.42em;
+    height: 0.42em;
+    margin-left: 0.3em;
+    border-radius: 50%;
+    background: var(--pop);
+}
+
+#contenedorBotonesDinamicos { border-left: 0; padding-left: 0; }
+
+/* ---------- Botones ---------- */
+button {
+    border-radius: 999px;
+    border: 1.5px solid var(--border-th);
+    background: var(--card-bg);
+    font-weight: 600;
+    padding: 7px 14px;
+}
+
+button:hover:not(:disabled) {
+    border-color: var(--pop);
+    color: var(--text-main);
+    transform: none;
+    background: var(--pop-soft);
+}
+
+.btn-export,
+.sidebar-hidden-active {
+    background: var(--pop) !important;
+    color: #1f201b !important;
+    border-color: var(--pop) !important;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.btn-export:hover:not(:disabled) {
+    background: #ff8257 !important;
+    color: #1f201b !important;
+    border-color: #ff8257 !important;
+}
+
+.btn-lock, .btn-assign, .btn-add-m, .btn-add-t, .btn-note, .btn-add-gru,
+.btn-row-lock, .btn-row-assign, .btn-row-clear,
+#cuerpoTabla td:last-child button {
+    border-radius: 50% !important;
+    border: 0 !important;
+    background: var(--card-accent) !important;
+}
+
+.btn-lock:hover, .btn-assign:hover, .btn-add-m:hover, .btn-add-t:hover, .btn-note:hover,
+.btn-add-gru:hover, #cuerpoTabla td:last-child button:hover {
+    background: var(--pop) !important;
+    color: #1f201b !important;
+}
+
+/* ---------- Paneles y campos ---------- */
+.date-range-panel,
+.schedule-panel,
+.sidebar,
+.table-container,
+.modal-content {
+    border-radius: var(--r-lg);
+    background: var(--card-bg);
+    border: 0 !important;
+}
+
+.date-range-panel summary::after,
+.schedule-panel summary::after {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--pop);
+    color: #1f201b;
+    font-size: 1rem;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="time"],
+select,
+.hora {
+    border-radius: 14px;
+    border: 1.5px solid transparent;
+    background: var(--paper);
+    padding: 9px 12px;
+}
+
+input:focus,
+select:focus {
+    border-color: var(--pop);
+    box-shadow: 0 0 0 3px var(--pop-soft);
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--pop);
+    outline-offset: 2px;
+}
+
+input[type="checkbox"]:checked { background-color: var(--pop); border-color: var(--pop); }
+input[type="checkbox"]:checked::after { border-color: #1f201b; }
+
+.time-group { border: 0; border-radius: var(--r-md); background: var(--card-accent); }
+.day-label { border: 0; border-radius: 999px; }
+
+/* ---------- Pestañas tipo selector (Día / Semana / Mes) ---------- */
+.tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--card-accent);
+    scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab-button {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.tab-button.active {
+    background: var(--pop);
+    color: #1f201b;
+    border: 0;
+}
+
+/* ---------- Tabla (escritorio) ---------- */
+.table-container { overflow: auto; }
+
+th {
+    background: var(--card-accent);
+    color: var(--text-main);
+    text-transform: none;
+    font-weight: 700;
+    border-bottom: 0;
+}
+
+td { border-bottom: 1px solid var(--border); }
+#cuerpoTabla td:first-child { font-weight: 700; }
+
+/* ---------- Listas y configuración ---------- */
+.participant-list li,
+.ter-config-item {
+    border-left: 0;
+    border-radius: 14px;
+    background: var(--card-accent);
+}
+
+.modal-header h3 { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
+.modal-header { border-bottom: 0; }
+.btn-close-modal { background: var(--card-accent); border-radius: 50%; width: 34px; height: 34px; color: var(--text-main); }
+
+.comment-cell { color: var(--accent) !important; }
+.week-row td { border-radius: 999px; }
+
+/* ---------- Tabla: una sola forma (tarjeta redondeada, contenido a ras) ---------- */
+.table-container {
+    padding: 0;
+    overflow: hidden auto;
+    border-radius: var(--r-lg);
+}
+
+table { border-radius: 0; }
+
+th:first-child, th:last-child { border-radius: 0; }
+
+th { padding: 12px 12px !important; }
+
+#cuerpoTabla tr:last-child td { border-bottom: 0; }
+
+.table-container .comment-cell {
+    background: var(--pop-soft) !important;
+    border-bottom: 0 !important;
+    color: var(--accent) !important;
+    font-style: normal;
+    font-weight: 600;
+}
+
+.table-container .rule-note-cell { background: var(--pop-soft) !important; }
+
+.table-container .week-row td {
+    background: var(--pop) !important;
+    color: #1f201b;
+    border-radius: 0;
+}
+
+.table-container .week-row button { color: #1f201b !important; }
+
+/* =========================================================
+   MÓVIL — tarjetas compactas + barra de acciones abajo
+   ========================================================= */
+@media screen and (max-width: 850px) {
+    body { padding: 10px 10px calc(84px + env(safe-area-inset-bottom)); }
+
+    .header-flex, #header-flex { display: block; margin-bottom: 8px; }
+    .header-title { font-size: 1.25rem; }
+
+    /* Barra de acciones flotante (zona del pulgar) */
+    #header-actions {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        z-index: 60;
+        flex-wrap: nowrap;
+        gap: 6px;
+        padding: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        border-radius: 999px;
+        background: #22231e;
+        -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+        mask-image: linear-gradient(to right, #000 88%, transparent);
+    }
+    #header-actions::-webkit-scrollbar { display: none; }
+
+    #header-actions button {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        padding: 8px 13px;
+        font-size: 0.8rem;
+        background: transparent;
+        border: 0;
+        color: #f3f0d9;
+    }
+
+    #header-actions button:hover:not(:disabled) { background: #3a3a33; color: #f3f0d9; }
+
+    #btnGenerarCronograma { order: -2; background: var(--pop) !important; color: #1f201b !important; }
+    #btnExportPDFHeader { order: -1; background: #f3f0d9 !important; color: #1f201b !important; }
+    #contenedorBotonesDinamicos { border: 0; padding: 0; }
+
+    .date-range-panel, .schedule-panel {
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        border-radius: 22px;
+    }
+    .date-range-controls { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+
+    /* Tarjeta del día: fecha + acciones en una sola fila */
+    #cuerpoTabla tr {
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 10px;
+        border: 0;
+        border-radius: var(--r-lg);
+        background: var(--card-bg);
+    }
+
+    #cuerpoTabla td:first-child {
+        order: -2;
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0 0 0 6px !important;
+        font-size: 1rem;
+    }
+
+    #cuerpoTabla td:first-child br { display: none; }
+    #cuerpoTabla td:first-child b { margin-right: 6px; color: var(--accent); }
+
+    #cuerpoTabla td:last-child {
+        order: -1;
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0 !important;
+        background: none;
+        border: 0;
+    }
+
+    #cuerpoTabla td:last-child .actions-wrapper,
+    #cuerpoTabla td:last-child .main-actions,
+    #cuerpoTabla td:last-child .extra-actions {
+        flex-wrap: nowrap;
+        width: auto;
+        gap: 4px;
+    }
+
+    .btn-lock, .btn-assign, .btn-note, .btn-add-m, .btn-add-t, .btn-add-gru,
+    #cuerpoTabla td:last-child button {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* Bloques Mañana / Tarde */
+    .cell-item { flex: 0 0 100%; padding: 3px 8px; }
+    .cell-item[data-label="L"] { margin-top: 6px; }
+
+    .cell-item::before {
+        flex: 0 0 22px;
+        width: 22px;
+        height: 22px;
+        margin-right: 8px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--primary);
+        color: var(--bg);
+        font-size: 0.7rem;
+    }
+
+    .cell-item select, .cell-item input {
+        height: 34px !important;
+        padding: 0 10px !important;
+        font-size: 0.88rem !important;
+        border: 0 !important;
+        border-radius: 10px;
+        background: var(--paper) !important;
+    }
+
+    .table-territory-info { margin-left: 30px; font-size: 0.7rem; }
+
+    .turno-m, [data-theme="dark"] .turno-m { background: var(--pop-soft); border-left: 4px solid var(--pop); }
+    .turno-t, [data-theme="dark"] .turno-t { background: var(--card-accent); border-left: 4px solid var(--text-muted); }
+
+    .cell-item.turno-m[data-label="L"], .cell-item.turno-t[data-label="L"] { border-radius: 14px 14px 0 0; padding-top: 6px; }
+    .cell-item.turno-m[data-label="C"], .cell-item.turno-t[data-label="C"] { border-radius: 0 0 14px 14px; padding-bottom: 6px; }
+    .cell-item.turno-m[data-label="C"] { margin-bottom: 6px; }
+
+    /* Filas extra: hora a la izquierda, "Eliminar" a la derecha */
+    #cuerpoTabla tr.fila-extra {
+        margin-top: -12px !important;
+        padding-top: 6px;
+        border-top: 2px dashed var(--border-th) !important;
+        border-radius: 0 0 var(--r-lg) var(--r-lg);
+    }
+
+    #cuerpoTabla tr.fila-extra .extra-delete-wrap { width: auto; padding: 0; }
+    #cuerpoTabla tr.fila-extra .extra-delete-wrap button { width: auto !important; padding: 4px 12px !important; }
+
+    /* Barra de semana: píldora naranja */
+    #cuerpoTabla tr.week-row {
+        padding: 0;
+        margin: 4px 0 10px;
+        background: var(--pop);
+        border-radius: 999px;
+    }
+
+    #cuerpoTabla tr.week-row td {
+        display: block !important;
+        flex: 1 1 100%;
+        order: 0;
+        margin: 0;
+        padding: 6px 12px !important;
+        background: none !important;
+        color: #1f201b;
+        font-size: 0.8rem;
+    }
+
+    #cuerpoTabla tr.week-row button { color: #1f201b !important; width: auto !important; }
+
+    /* Notas */
+    #cuerpoTabla tr.comment-row {
+        padding: 0;
+        margin: -4px 0 10px;
+        background: var(--pop-soft);
+        border-radius: 16px;
+    }
+
+    #cuerpoTabla tr.comment-row td.comment-cell {
+        display: block !important;
+        flex: 1 1 100%;
+        order: 0;
+        margin: 0;
+        padding: 8px 40px 8px 12px !important;
+        background: none !important;
+        border: 0 !important;
+        font-size: 0.78rem !important;
+    }
+
+    /* Panel lateral como hoja inferior */
+    .sidebar {
+        height: 78dvh !important;
+        max-height: 78dvh;
+        border-radius: 28px 28px 0 0;
+        border: 0 !important;
+        padding: 10px 14px 14px;
+    }
+
+    .sidebar::before {
+        content: "";
+        display: block;
+        width: 42px;
+        height: 4px;
+        margin: 0 auto 10px;
+        border-radius: 9px;
+        background: var(--border-th);
+    }
+
+    #btnExportPDF { display: none; } /* el PDF ya está en la barra inferior */
+}
+
+/* Configuración como hoja inferior en móviles */
+@media screen and (max-width: 600px) {
+    .modal-overlay { align-items: flex-end; padding: 0; }
+
+    .modal-content {
+        width: 100%;
+        max-height: 92dvh;
+        padding: 14px;
+        border-radius: 28px 28px 0 0;
+    }
+
+    .tabs { flex-wrap: nowrap; }
+    .tab-button { flex: 0 0 auto; padding: 8px 12px; font-size: 0.8rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+}
