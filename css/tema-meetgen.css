@@ -526,13 +526,13 @@ input {
 
 button {
     touch-action: manipulation;
-    transition: color 220ms var(--ease-elegant), background-color 220ms var(--ease-elegant),
-        border-color 220ms var(--ease-elegant), box-shadow 220ms var(--ease-elegant),
-        transform 220ms var(--ease-elegant);
+    transition: color 320ms var(--ease-elegant), background-color 320ms var(--ease-elegant),
+        border-color 320ms var(--ease-elegant), box-shadow 320ms var(--ease-elegant),
+        transform 320ms var(--ease-elegant);
 }
 
 button:active:not(:disabled) {
-    transform: translateY(1px) scale(0.94);
+    transform: translateY(2px) scale(0.93);
 }
 
 button:focus-visible,
@@ -547,19 +547,19 @@ input:focus-visible {
         border-color: var(--accent);
         background-color: var(--pop-soft);
         color: var(--text-main);
-        transform: translateY(-2px) scale(1.02);
-        box-shadow: 0 6px 14px rgb(34 39 31 / 14%);
+        transform: translateY(-3px) scale(1.025);
+        box-shadow: 0 9px 20px rgb(34 39 31 / 16%);
     }
 
     #header-actions button:hover:not(:disabled),
     #cuerpoTabla td:last-child button:hover:not(:disabled) {
-        transform: translateY(-2px) scale(1.02);
-        box-shadow: 0 6px 14px rgb(34 39 31 / 14%);
+        transform: translateY(-3px) scale(1.025);
+        box-shadow: 0 9px 20px rgb(34 39 31 / 16%);
     }
 
     #header-actions button:active:not(:disabled),
     #cuerpoTabla td:last-child button:active:not(:disabled) {
-        transform: translateY(1px) scale(0.94);
+        transform: translateY(2px) scale(0.93);
         box-shadow: none;
     }
 
@@ -578,7 +578,7 @@ input:focus-visible {
     }
 
     button:active:not(:disabled) {
-        transform: translateY(1px) scale(0.94);
+        transform: translateY(2px) scale(0.93);
     }
 
     #header-actions button:hover:not(:disabled) {
@@ -699,8 +699,8 @@ body,
 .cell-item,
 th,
 td {
-    transition: background-color 280ms var(--ease-elegant), border-color 280ms var(--ease-elegant),
-        color 280ms var(--ease-elegant), box-shadow 280ms var(--ease-elegant);
+    transition: background-color 380ms var(--ease-elegant), border-color 380ms var(--ease-elegant),
+        color 380ms var(--ease-elegant), box-shadow 380ms var(--ease-elegant);
 }
 
 .date-range-panel,
@@ -708,15 +708,15 @@ td {
 .sidebar,
 .table-container,
 .modal-content {
-    transition: background-color 300ms var(--ease-elegant), border-color 300ms var(--ease-elegant),
-        box-shadow 300ms var(--ease-elegant), transform 300ms var(--ease-elegant);
+    transition: background-color 420ms var(--ease-elegant), border-color 420ms var(--ease-elegant),
+        box-shadow 420ms var(--ease-elegant), transform 420ms var(--ease-elegant);
 }
 
 input,
 select,
 textarea {
-    transition: background-color 240ms var(--ease-elegant), border-color 240ms var(--ease-elegant),
-        box-shadow 240ms var(--ease-elegant), color 240ms var(--ease-elegant);
+    transition: background-color 320ms var(--ease-elegant), border-color 320ms var(--ease-elegant),
+        box-shadow 320ms var(--ease-elegant), color 320ms var(--ease-elegant);
 }
 
 .date-range-panel summary::after,
@@ -724,23 +724,23 @@ textarea {
 .tab-button,
 .day-label,
 .btn-close-modal {
-    transition: background-color 240ms var(--ease-elegant), color 240ms var(--ease-elegant),
-        border-color 240ms var(--ease-elegant), box-shadow 240ms var(--ease-elegant),
-        transform 240ms var(--ease-elegant);
+    transition: background-color 320ms var(--ease-elegant), color 320ms var(--ease-elegant),
+        border-color 320ms var(--ease-elegant), box-shadow 320ms var(--ease-elegant),
+        transform 320ms var(--ease-elegant);
 }
 
 details[open] > :not(summary) {
-    animation: panel-reveal 340ms var(--ease-elegant) both;
+    animation: panel-reveal 480ms var(--ease-elegant) both;
 }
 
 .modal-content {
-    animation: modal-reveal 340ms var(--ease-elegant) both;
+    animation: modal-reveal 520ms var(--ease-elegant) both;
 }
 
 @keyframes panel-reveal {
     from {
         opacity: 0;
-        transform: translateY(-12px);
+        transform: translateY(-16px);
     }
     to {
         opacity: 1;
@@ -751,7 +751,7 @@ details[open] > :not(summary) {
 @keyframes modal-reveal {
     from {
         opacity: 0;
-        transform: translateY(16px) scale(0.96);
+        transform: translateY(20px) scale(0.95);
     }
     to {
         opacity: 1;
@@ -762,13 +762,13 @@ details[open] > :not(summary) {
 @media (hover: hover) and (pointer: fine) {
     .participant-list li:hover,
     .ter-config-item:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 7px 18px rgb(34 39 31 / 12%);
+        transform: translateY(-3px);
+        box-shadow: 0 9px 22px rgb(34 39 31 / 14%);
     }
 
     .tab-button:not(.active):hover,
     .day-label:hover {
-        transform: translateY(-2px) scale(1.02);
+        transform: translateY(-3px) scale(1.025);
     }
 }
 
@@ -780,4 +780,43 @@ details[open] > :not(summary) {
         scroll-behavior: auto !important;
         transition: none !important;
     }
+
+    button,
+    input,
+    select,
+    textarea,
+    .date-range-panel,
+    .schedule-panel,
+    .sidebar,
+    .table-container,
+    .modal-content,
+    .time-group,
+    .participant-list li,
+    .ter-config-item,
+    .cell-item,
+    th,
+    td {
+        transition-property: background-color, border-color, color, box-shadow, opacity !important;
+        transition-duration: 300ms !important;
+        transition-timing-function: ease-out !important;
+    }
+
+    button:hover:not(:disabled),
+    button:active:not(:disabled),
+    .participant-list li:hover,
+    .ter-config-item:hover,
+    .tab-button:hover,
+    .day-label:hover {
+        transform: none !important;
+    }
+
+    details[open] > :not(summary),
+    .modal-content {
+        animation: reduced-motion-fade 300ms ease-out both !important;
+    }
+}
+
+@keyframes reduced-motion-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
