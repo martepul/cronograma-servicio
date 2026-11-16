@@ -1,13 +1,14 @@
 // Service worker: la app siempre intenta cargar la versión más reciente de tu
 // página (red primero) y, si no hay internet, usa la copia guardada.
 // Para forzar una limpieza de caché, cambia el número de VERSION.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `cronograma-${VERSION}`;
 
 const ARCHIVOS = [
   './',
   './index.html',
   './css/style.css',
+  './css/tema-meetgen.css',
   './js/script.js',
   './favicon_io/favicon.ico',
   './manifest.webmanifest',
