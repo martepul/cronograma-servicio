@@ -2,28 +2,40 @@
 
 /* =========================================================
    TEMA MEETGEN — se carga DESPUÉS de style.css
-   Marfil + oliva (claro) / carbón + oliva (oscuro)
+   Oyster, arena, terracota, salvia, trufa y cobre
    ========================================================= */
 
 :root {
-    --bg: #ece4dc;
-    --card-bg: #f7f4ee;
-    --card-accent: #dde1d5;
-    --text-main: #2d2d29;
-    --text-muted: #5a5d52;
-    --primary: #536455;
-    --accent: #60745f;
-    --accent-contrast: #f7f4ee;
-    --row-green: #dbe2d3;
-    --border: #d2c8be;
-    --border-th: #c0b7aa;
-    --row-hover: #efe6df;
+    --oyster: #F9F4EA;
+    --sand: #CDAD85;
+    --terracotta: #C47457;
+    --sage: #9C9E80;
+    --truffle: #605F4B;
+    --copper: #B68036;
+    --bg: var(--oyster);
+    --card-bg: #FFFCF6;
+    --card-accent: #E9E8D8;
+    --text-main: var(--truffle);
+    --text-muted: #6D6C59;
+    --primary: var(--truffle);
+    --accent: #98513A;
+    --accent-contrast: var(--oyster);
+    --row-green: #E7E8D9;
+    --row-alt: #F6F1E7;
+    --border: #E2D9C8;
+    --border-th: #CDB99A;
+    --row-hover: #F0E8DA;
     --overlay: rgb(24 27 22 / 36%);
-    --pop: #60745f;
-    --pop-soft: #dfe7d8;
-    --danger: #a84f43;
-    --danger-soft: #f3e2dd;
-    --paper: #f9f5f1;
+    --pop: var(--copper);
+    --pop-contrast: #211D13;
+    --pop-soft: #F2E6D0;
+    --danger: #98493B;
+    --danger-contrast: var(--oyster);
+    --danger-soft: #F4E4DB;
+    --paper: #FFFDF8;
+    --action-bar: var(--truffle);
+    --action-bar-hover: #4C4B3A;
+    --action-bar-text: var(--oyster);
     --r-lg: 26px;
     --r-md: 16px;
     --code-font: "Bricolage Grotesque", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -31,23 +43,33 @@
 }
 
 [data-theme="dark"] {
-    --bg: #1d201b;
-    --card-bg: #2a2f28;
-    --card-accent: #394139;
-    --text-main: #f3efe7;
-    --text-muted: #c9d0c0;
-    --primary: #dfe7d8;
-    --accent: #83977e;
-    --accent-contrast: #1d201b;
-    --row-green: #4c5d4a;
-    --border: #454e46;
-    --border-th: #5a645d;
-    --row-hover: #30372f;
+    --sand: #8C7558;
+    --terracotta: #D38A6B;
+    --sage: #B0B28F;
+    --bg: #26261F;
+    --card-bg: #323229;
+    --card-accent: #414136;
+    --text-main: var(--oyster);
+    --text-muted: #D1C8B2;
+    --primary: #F1E8D7;
+    --accent: #D38A6B;
+    --accent-contrast: #29251F;
+    --row-green: #414437;
+    --row-alt: #37362C;
+    --border: #4A493D;
+    --border-th: #5D5B4D;
+    --row-hover: #3A392F;
     --overlay: rgb(0 0 0 / 65%);
-    --pop-soft: #394a39;
-    --danger: #e58b7e;
-    --danger-soft: #4a302c;
-    --paper: #323a32;
+    --pop: #D1A157;
+    --pop-contrast: #2C281F;
+    --pop-soft: #4B4030;
+    --danger: #E08B7A;
+    --danger-contrast: #29251F;
+    --danger-soft: #4A302C;
+    --paper: #39382E;
+    --action-bar: #1E1E19;
+    --action-bar-hover: #39382D;
+    --action-bar-text: var(--oyster);
 }
 
 body {
@@ -74,7 +96,7 @@ body {
     letter-spacing: -0.045em;
     line-height: 1.05;
     font-size: clamp(1.7rem, 2.8vw, 2.8rem);
-    color: #171512;
+    color: var(--text-main);
     display: block;
     max-width: 760px;
     text-transform: none;
@@ -134,7 +156,7 @@ button:hover:not(:disabled) {
 .btn-lock:hover, .btn-assign:hover, .btn-add-m:hover, .btn-add-t:hover, .btn-note:hover,
 .btn-add-gru:hover, #cuerpoTabla td:last-child button:hover {
     background: var(--pop) !important;
-    color: #1f201b !important;
+    color: var(--pop-contrast) !important;
 }
 
 /* ---------- Paneles y campos ---------- */
@@ -189,9 +211,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 input[type="checkbox"]:checked { background-color: var(--pop); border-color: var(--pop); }
-input[type="checkbox"]:checked::after { border-color: #1f201b; }
+input[type="checkbox"]:checked::after { border-color: var(--pop-contrast); }
 
-.time-group { border: 0; border-radius: var(--r-md); background: var(--card-accent); }
+.time-group {
+    border: 0;
+    border-inline-start: 3px solid var(--sage);
+    border-radius: var(--r-md);
+    background: var(--card-accent);
+}
 .day-label { border: 0; border-radius: 999px; }
 
 /* ---------- Pestañas tipo selector (Día / Semana / Mes) ---------- */
@@ -232,11 +259,11 @@ th {
     color: var(--text-main);
     text-transform: none;
     font-weight: 700;
-    border-bottom: 0;
+    border-bottom: 1px solid var(--sand);
 }
 
 tr:nth-child(even) td {
-    background: rgba(179, 173, 161, 0.08);
+    background: var(--row-alt);
 }
 
 td { border-bottom: 1px solid var(--border); }
@@ -254,7 +281,10 @@ td { border-bottom: 1px solid var(--border); }
 .modal-header { border-bottom: 0; }
 .btn-close-modal { background: var(--card-accent); border-radius: 50%; width: 34px; height: 34px; color: var(--text-main); }
 
-.comment-cell { color: var(--accent) !important; }
+.comment-cell {
+    color: var(--accent) !important;
+    border-inline-start: 3px solid var(--terracotta);
+}
 .week-row td { border-radius: 999px; }
 
 /* ---------- Tabla: una sola forma (tarjeta redondeada, contenido a ras) ---------- */
@@ -284,11 +314,11 @@ th { padding: 12px 12px !important; }
 
 .table-container .week-row td {
     background: var(--pop) !important;
-    color: #1f201b;
+    color: var(--pop-contrast);
     border-radius: 0;
 }
 
-.table-container .week-row button { color: #1f201b !important; }
+.table-container .week-row button { color: var(--pop-contrast) !important; }
 
 /* =========================================================
    MÓVIL — tarjetas compactas + barra de acciones abajo
@@ -316,13 +346,11 @@ th { padding: 12px 12px !important; }
         overflow-x: auto;
         scrollbar-width: none;
         border-radius: 999px;
-        background: #22231e;
+        background: var(--action-bar);
         -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
         mask-image: linear-gradient(to right, #000 88%, transparent);
     }
     #header-actions::-webkit-scrollbar { display: none; }
-    [data-theme="dark"] #header-actions { background: #34342d; }
-
     #header-actions button {
         flex: 0 0 auto;
         white-space: nowrap;
@@ -330,13 +358,13 @@ th { padding: 12px 12px !important; }
         font-size: 0.8rem;
         background: transparent;
         border: 0;
-        color: #f3f0d9;
+        color: var(--action-bar-text);
     }
 
-    #header-actions button:hover:not(:disabled) { background: #3a3a33; color: #f3f0d9; }
+    #header-actions button:hover:not(:disabled) { background: var(--action-bar-hover); color: var(--action-bar-text); }
 
-    #btnGenerarCronograma { order: -2; background: var(--pop) !important; color: #1f201b !important; }
-    #btnExportPDFHeader { order: -1; background: #f3f0d9 !important; color: #1f201b !important; }
+    #btnGenerarCronograma { order: -2; background: var(--pop) !important; color: var(--pop-contrast) !important; }
+    #btnExportPDFHeader { order: -1; background: var(--paper) !important; color: var(--text-main) !important; }
     #contenedorBotonesDinamicos { border: 0; padding: 0; }
 
     .date-range-panel, .schedule-panel {
@@ -455,11 +483,11 @@ th { padding: 12px 12px !important; }
         margin: 0;
         padding: 6px 12px !important;
         background: none !important;
-        color: #1f201b;
+        color: var(--pop-contrast);
         font-size: 0.8rem;
     }
 
-    #cuerpoTabla tr.week-row button { color: #1f201b !important; width: auto !important; }
+    #cuerpoTabla tr.week-row button { color: var(--pop-contrast) !important; width: auto !important; }
 
     /* Notas */
     #cuerpoTabla tr.comment-row {
@@ -526,9 +554,11 @@ input {
 
 button {
     touch-action: manipulation;
-    transition: color 320ms var(--ease-elegant), background-color 320ms var(--ease-elegant),
-        border-color 320ms var(--ease-elegant), box-shadow 320ms var(--ease-elegant),
-        transform 320ms var(--ease-elegant);
+    transition: color var(--theme-transition-duration) var(--ease-elegant),
+        background-color var(--theme-transition-duration) var(--ease-elegant),
+        border-color var(--theme-transition-duration) var(--ease-elegant),
+        box-shadow var(--theme-transition-duration) var(--ease-elegant),
+        transform 200ms var(--ease-elegant);
 }
 
 button:active:not(:disabled) {
@@ -612,7 +642,7 @@ input:focus-visible {
 #cuerpoTabla tr.fila-extra .extra-delete-wrap button:active:not(:disabled) {
     background: var(--danger) !important;
     border-color: var(--danger) !important;
-    color: #fff !important;
+    color: var(--danger-contrast) !important;
 }
 
 #cuerpoTabla tr.fila-extra .extra-delete-wrap button:disabled {
@@ -624,7 +654,7 @@ input:focus-visible {
     #cuerpoTabla tr.fila-extra .extra-delete-wrap button:hover:not(:disabled) {
         background: var(--danger) !important;
         border-color: var(--danger) !important;
-        color: #fff !important;
+        color: var(--danger-contrast) !important;
     }
 }
 
@@ -685,22 +715,29 @@ input:focus-visible {
 
 :root {
     --ease-elegant: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --theme-transition-duration: 160ms;
 }
 
 body,
+.header-title,
+#header-actions,
 .date-range-panel,
 .schedule-panel,
 .sidebar,
 .table-container,
 .modal-content,
+.tabs,
 .time-group,
 .participant-list li,
 .ter-config-item,
 .cell-item,
+.cell-item::before,
 th,
 td {
-    transition: background-color 380ms var(--ease-elegant), border-color 380ms var(--ease-elegant),
-        color 380ms var(--ease-elegant), box-shadow 380ms var(--ease-elegant);
+    transition: background-color var(--theme-transition-duration) var(--ease-elegant),
+        border-color var(--theme-transition-duration) var(--ease-elegant),
+        color var(--theme-transition-duration) var(--ease-elegant),
+        box-shadow var(--theme-transition-duration) var(--ease-elegant);
 }
 
 .date-range-panel,
@@ -708,25 +745,36 @@ td {
 .sidebar,
 .table-container,
 .modal-content {
-    transition: background-color 420ms var(--ease-elegant), border-color 420ms var(--ease-elegant),
-        box-shadow 420ms var(--ease-elegant), transform 420ms var(--ease-elegant);
+    transition: background-color var(--theme-transition-duration) var(--ease-elegant),
+        border-color var(--theme-transition-duration) var(--ease-elegant),
+        box-shadow var(--theme-transition-duration) var(--ease-elegant), transform 220ms var(--ease-elegant);
 }
 
 input,
+input[type="text"],
+input[type="date"],
+input[type="time"],
 select,
-textarea {
-    transition: background-color 320ms var(--ease-elegant), border-color 320ms var(--ease-elegant),
-        box-shadow 320ms var(--ease-elegant), color 320ms var(--ease-elegant);
+textarea,
+.hora {
+    transition: background-color var(--theme-transition-duration) var(--ease-elegant),
+        border-color var(--theme-transition-duration) var(--ease-elegant),
+        box-shadow var(--theme-transition-duration) var(--ease-elegant),
+        color var(--theme-transition-duration) var(--ease-elegant);
 }
 
+.date-range-panel summary,
+.schedule-panel summary,
 .date-range-panel summary::after,
 .schedule-panel summary::after,
 .tab-button,
 .day-label,
 .btn-close-modal {
-    transition: background-color 320ms var(--ease-elegant), color 320ms var(--ease-elegant),
-        border-color 320ms var(--ease-elegant), box-shadow 320ms var(--ease-elegant),
-        transform 320ms var(--ease-elegant);
+    transition: background-color var(--theme-transition-duration) var(--ease-elegant),
+        color var(--theme-transition-duration) var(--ease-elegant),
+        border-color var(--theme-transition-duration) var(--ease-elegant),
+        box-shadow var(--theme-transition-duration) var(--ease-elegant),
+        transform 200ms var(--ease-elegant);
 }
 
 details[open] > :not(summary) {
@@ -781,26 +829,6 @@ details[open] > :not(summary) {
         transition: none !important;
     }
 
-    button,
-    input,
-    select,
-    textarea,
-    .date-range-panel,
-    .schedule-panel,
-    .sidebar,
-    .table-container,
-    .modal-content,
-    .time-group,
-    .participant-list li,
-    .ter-config-item,
-    .cell-item,
-    th,
-    td {
-        transition-property: background-color, border-color, color, box-shadow, opacity !important;
-        transition-duration: 300ms !important;
-        transition-timing-function: ease-out !important;
-    }
-
     button:hover:not(:disabled),
     button:active:not(:disabled),
     .participant-list li:hover,
@@ -809,14 +837,4 @@ details[open] > :not(summary) {
     .day-label:hover {
         transform: none !important;
     }
-
-    details[open] > :not(summary),
-    .modal-content {
-        animation: reduced-motion-fade 300ms ease-out both !important;
-    }
-}
-
-@keyframes reduced-motion-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
 }

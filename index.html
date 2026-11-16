@@ -13,11 +13,11 @@
     <link rel="stylesheet" href="css/tema-meetgen.css">
     <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico">
     <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#ece5df">
+    <meta name="theme-color" content="#F9F4EA">
     <script>
         (function () {
             var m = document.querySelector('meta[name="theme-color"]');
-            function u() { m.setAttribute('content', document.documentElement.getAttribute('data-theme') === 'dark' ? '#1d1d1a' : '#e4e5c8'); }
+            function u() { m.setAttribute('content', document.documentElement.getAttribute('data-theme') === 'dark' ? '#26261F' : '#F9F4EA'); }
             u();
             new MutationObserver(u).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
         })();
