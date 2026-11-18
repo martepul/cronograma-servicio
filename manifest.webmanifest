@@ -1,6 +1,6 @@
 {
   "name": "Cronograma de Servicio del Campo",
-  "short_name": "Cronograma",
+  "short_name": "Servicio",
   "description": "Genera y administra el cronograma de servicio del campo.",
   "lang": "es",
   "start_url": "./",
