@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>JW - Predicación de casa en casa</title>
+    <title>Cronograma de Servicio del Campo</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
@@ -28,7 +28,7 @@
 <body>
 
     <div class="header-flex">
-        <h1 class="header-title">Programa de servicio de casa en casa</h1>
+        <h1 class="header-title">Cronograma de servicio de casa en casa</h1>
         <div id="header-actions">
             <button id="btnToggleTheme">🌓 Modo</button>
             <button id="btnBloquearTodo">🔒 Bloquear Todo</button>
@@ -170,7 +170,7 @@
 
                     <div id="conductoresPane" class="tab-pane active">
                         <h3>Gestionar Conductores</h3>
-                        <p class="settings-help">Para la asignación automática, marca ancianos y ministeriales: los fines de semana conducen ancianos, y un ministerial conduce una sola vez en el último día de fin de semana del mes. Asignaciones fijas: Manuel Leal (lunes por la mañana), Arquímedes Rodríguez (martes por la mañana), Jorge Espinoza (jueves por la tarde) y Randy Useche (P) (último viernes por la tarde).</p>
+                        <p class="settings-help">Para la asignación automática, marca ancianos y ministeriales: los fines de semana conducen ancianos, y un ministerial conduce una sola vez en el último día de fin de semana del mes. Los conductores fijos por día y turno se configuran en la pestaña “Reglas de generación”.</p>
                         <input type="text" id="nuevoConductorNombre" placeholder="Nombre...">
                         <button id="btnAgregarConductor">+ Añadir</button>
 
@@ -221,6 +221,15 @@
                     </div>
 
                     <div id="reglasPane" class="tab-pane">
+                        <h3>Conductores fijos</h3>
+                        <label class="rule-toggle">
+                            <input type="checkbox" id="reglaFijosActiva">
+                            Aplicar asignaciones fijas al generar
+                        </label>
+                        <p class="settings-help">Al pulsar Generar, estos conductores se colocan siempre en el día y turno indicados (si ese turno está activo y no lo has editado a mano). Puedes cambiar la persona, el día, el turno o la frecuencia cuando quieras. Un conductor fijo no se asigna además en el otro turno del mismo día.</p>
+                        <ul id="listaFijos" class="fijos-list"></ul>
+                        <button type="button" id="btnAgregarFijo">+ Añadir asignación fija</button>
+
                         <h3>Visita del superintendente de servicio</h3>
                         <label class="rule-toggle">
                             <input type="checkbox" id="reglaVisitaActiva">

@@ -2711,3 +2711,23 @@ select:focus {
         font-size: 0.74rem;
     }
 }
+
+
+/* --- Conductores fijos (Reglas de generación) --- */
+.fijos-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fijo-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.4fr) auto;
+    gap: 6px;
+    align-items: center;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.fijo-row select { width: 100%; min-width: 0; }
+.fijo-del { background: transparent; border: none; cursor: pointer; font-size: 1.2em; color: var(--accent); width: auto; }
+.fijo-vacio { font-size: 0.85em; opacity: 0.7; padding: 6px; }
+@media (max-width: 600px) {
+    .fijo-row { grid-template-columns: 1fr 1fr auto; }
+    .fijo-row select:first-child { grid-column: 1 / -1; }
+}

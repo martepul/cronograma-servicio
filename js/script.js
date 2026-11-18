@@ -105,6 +105,15 @@
 
     const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
+    // --- ASIGNACIONES FIJAS (editables en Configuración > Reglas de generación) ---
+    const crearIdFijo = () => `fijo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const FIJOS_POR_DEFECTO = () => [
+        { id: crearIdFijo(), conductor: 'Manuel Leal', dia: 1, turno: 'M', ocurrencia: 'todos' },
+        { id: crearIdFijo(), conductor: 'Arquímedes Rodríguez', dia: 2, turno: 'M', ocurrencia: 'todos' },
+        { id: crearIdFijo(), conductor: 'Jorge Espinoza', dia: 4, turno: 'T', ocurrencia: 'todos' },
+        { id: crearIdFijo(), conductor: 'Randy Useche (P)', dia: 5, turno: 'T', ocurrencia: 'ultimo' }
+    ];
+
     // --- ESTADO ---
     let state = {
         conductores: [],
@@ -125,7 +134,8 @@
         horariosCustom: {}, // Nuevo estado para horarios custom por día
         reglasGeneracion: {
             visita: { activa: true, plantilla: 'Visita del superintendente de servicio al {grupo}', gruposPorMes: {} },
-            cartas: { activa: true, semanas: [1, 3], dias: [3, 5] }
+            cartas: { activa: true, semanas: [1, 3], dias: [3, 5] },
+            fijos: { activa: true, items: FIJOS_POR_DEFECTO() }
         },
         uiState: { openGroups: {} }
     };
@@ -390,6 +400,20 @@
                         ...(reglasGuardadas.cartas || {}),
                         semanas: Array.isArray(semanas) ? semanas : [1, 3],
                         dias: Array.isArray(dias) ? dias : [3, 5]
+                    },
+                    fijos: {
+                        activa: reglasGuardadas.fijos?.activa !== false,
+                        items: Array.isArray(reglasGuardadas.fijos?.items)
+                            ? reglasGuardadas.fijos.items
+                                .filter(item => item && typeof item === 'object')
+                                .map(item => ({
+                                    id: typeof item.id === 'string' && item.id ? item.id : crearIdFijo(),
+                                    conductor: typeof item.conductor === 'string' ? item.conductor : '',
+                                    dia: Number.isInteger(item.dia) && item.dia >= 0 && item.dia <= 6 ? item.dia : 1,
+                                    turno: item.turno === 'T' ? 'T' : 'M',
+                                    ocurrencia: ['todos', 'primero', 'ultimo'].includes(item.ocurrencia) ? item.ocurrencia : 'todos'
+                                }))
+                            : FIJOS_POR_DEFECTO()
                     }
                 };
             }
@@ -581,18 +605,24 @@
             while (ultimoDia.getDay() !== 0 && ultimoDia.getDay() !== 6) ultimoDia.setDate(ultimoDia.getDate() - 1);
             return fecha.getDate() === ultimoDia.getDate();
         };
-        const esUltimoViernesMes = fecha => {
-            const ultimoDia = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
-            while (ultimoDia.getDay() !== 5) ultimoDia.setDate(ultimoDia.getDate() - 1);
-            return fecha.getDate() === ultimoDia.getDate();
+        const esPrimeraOcurrenciaEnMes = fecha => fecha.getDate() <= 7;
+        const esUltimaOcurrenciaEnMes = fecha => {
+            const siguiente = new Date(fecha);
+            siguiente.setDate(siguiente.getDate() + 7);
+            return siguiente.getMonth() !== fecha.getMonth();
         };
+        // Devuelve el conductor fijo configurado para ese día y turno ('' si no hay).
+        // Las reglas específicas (primero/último del mes) tienen prioridad sobre las de "todos".
         const conductorFijoPara = (fecha, turno) => {
+            const reglaFijos = state.reglasGeneracion.fijos;
+            if (!reglaFijos?.activa) return '';
             const dia = fecha.getDay();
-            if (turno === 'M' && dia === 1) return 'Manuel Leal';
-            if (turno === 'M' && dia === 2) return 'Arquímedes Rodríguez';
-            if (turno === 'T' && dia === 4) return 'Jorge Espinoza';
-            if (turno === 'T' && dia === 5 && esUltimoViernesMes(fecha)) return 'Randy Useche (P)';
-            return '';
+            const candidatas = reglaFijos.items.filter(item => item.conductor && item.dia === dia && item.turno === turno);
+            const especifica = candidatas.find(item =>
+                (item.ocurrencia === 'ultimo' && esUltimaOcurrenciaEnMes(fecha)) ||
+                (item.ocurrencia === 'primero' && esPrimeraOcurrenciaEnMes(fecha)));
+            const general = candidatas.find(item => item.ocurrencia === 'todos');
+            return (especifica || general)?.conductor || '';
         };
         const conductoresFijosFaltantes = new Set();
         let requiereAncianoFinDeSemana = false;
@@ -1267,6 +1297,77 @@
             actualizarTodo();
         };
 
+        renderFijos();
+    }
+
+    function renderFijos() {
+        const chkActiva = document.getElementById('reglaFijosActiva');
+        const lista = document.getElementById('listaFijos');
+        const btnAgregar = document.getElementById('btnAgregarFijo');
+        if (!chkActiva || !lista || !btnAgregar) return;
+
+        const fijos = state.reglasGeneracion.fijos;
+        chkActiva.checked = fijos.activa;
+        chkActiva.onchange = () => { fijos.activa = chkActiva.checked; saveToStorage(); };
+
+        const ordenDias = [1, 2, 3, 4, 5, 6, 0];
+        lista.innerHTML = '';
+        if (fijos.items.length === 0) {
+            const vacio = document.createElement('li');
+            vacio.className = 'fijo-vacio';
+            vacio.textContent = 'No hay asignaciones fijas. Pulsa “+ Añadir asignación fija”.';
+            lista.appendChild(vacio);
+        }
+        fijos.items.forEach((item, idx) => {
+            const li = document.createElement('li');
+            li.className = 'fijo-row';
+
+            const selCond = document.createElement('select');
+            selCond.setAttribute('aria-label', 'Conductor fijo');
+            selCond.add(new Option('— Elegir conductor —', ''));
+            state.conductores.forEach(c => selCond.add(new Option(c.name, c.name)));
+            if (item.conductor && !state.conductores.some(c => c.name === item.conductor)) {
+                selCond.add(new Option(`${item.conductor} (no está en la lista)`, item.conductor));
+            }
+            selCond.value = item.conductor;
+            selCond.onchange = () => { item.conductor = selCond.value; saveToStorage(); };
+
+            const selDia = document.createElement('select');
+            selDia.setAttribute('aria-label', 'Día');
+            ordenDias.forEach(d => selDia.add(new Option(DIAS_SEMANA[d], String(d))));
+            selDia.value = String(item.dia);
+            selDia.onchange = () => { item.dia = parseInt(selDia.value, 10); saveToStorage(); };
+
+            const selTurno = document.createElement('select');
+            selTurno.setAttribute('aria-label', 'Turno');
+            selTurno.add(new Option('Mañana', 'M'));
+            selTurno.add(new Option('Tarde', 'T'));
+            selTurno.value = item.turno;
+            selTurno.onchange = () => { item.turno = selTurno.value; saveToStorage(); };
+
+            const selOcu = document.createElement('select');
+            selOcu.setAttribute('aria-label', 'Frecuencia');
+            selOcu.add(new Option('Todas las semanas', 'todos'));
+            selOcu.add(new Option('Solo el primero del mes', 'primero'));
+            selOcu.add(new Option('Solo el último del mes', 'ultimo'));
+            selOcu.value = item.ocurrencia;
+            selOcu.onchange = () => { item.ocurrencia = selOcu.value; saveToStorage(); };
+
+            const btnDel = document.createElement('button');
+            btnDel.type = 'button';
+            btnDel.className = 'fijo-del';
+            btnDel.textContent = '×';
+            btnDel.title = 'Quitar esta asignación fija';
+            btnDel.onclick = () => { fijos.items.splice(idx, 1); actualizarTodo(); };
+
+            li.append(selCond, selDia, selTurno, selOcu, btnDel);
+            lista.appendChild(li);
+        });
+
+        btnAgregar.onclick = () => {
+            fijos.items.push({ id: crearIdFijo(), conductor: '', dia: 1, turno: 'M', ocurrencia: 'todos' });
+            actualizarTodo();
+        };
     }
 
     function renderListas() {
